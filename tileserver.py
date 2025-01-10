@@ -12,7 +12,7 @@ reader = WSIReader.open(svs)
 # Initialize and run the TileServer
 tile_server = TileServer(
     title="Tiatoolbox TileServer",
-    layers={"layer": reader},
+    layers={},
 )
 CORS(tile_server, send_wildcard=True)
 

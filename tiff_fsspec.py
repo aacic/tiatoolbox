@@ -33,7 +33,13 @@ def _parse_svs_metadata(pages: TiffPages) -> dict[str, Any]:
     description_headers, key_value_pairs = parts[0], parts[1:]
     description_headers = description_headers.split(";")
 
-    software, photometric_info = description_headers[0].splitlines()
+    try:
+        software, photometric_info = description_headers[0].splitlines()
+    except ValueError:
+        software, photometric_info = "Not present", "Not present"
+
+    raw["Software"] = software
+    raw["Photometric Info"] = photometric_info
     raw["Software"] = software
     raw["Photometric Info"] = photometric_info
 
