@@ -27,7 +27,7 @@ jobs:
             -   name: Build Docker Image
                 uses: docker/build-push-action@v6.12.0
                 with:
-                    context: ./container/
+                    context: .
                     file: ./Dockerfile
                     tags: tileserver:latest
                     platforms: linux/amd64
