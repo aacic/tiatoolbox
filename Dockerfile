@@ -1,4 +1,4 @@
-FROM python:3.9-slim-bookworm
+FROM python:3.12-slim-bullseye
 
 
 LABEL org.opencontainers.image.source="https://github.com/aacic/tiatoolbox/" \
@@ -40,7 +40,7 @@ COPY ./docs /home/root/tileserver/docs
 
 COPY ./tiatoolbox /home/root/tileserver/tiatoolbox
 
-RUN pip install -r /home/root/tileserver/requirements/requirements_dev.txt
+RUN pip install -r /home/root/tileserver/requirements/requirements.txt
 
 EXPOSE $PORT
 
