@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Define the network name
 network_name="pp_network"
 
 # Check if the network exists

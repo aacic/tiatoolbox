@@ -30,7 +30,7 @@ docker run -d \
 	--network pp_network \
 	--mount type=bind,source=$TP,target=/home/root/tileserver/tp,readonly \
 	-e PORT=$PORT \
-	--memory="4g" \
-	 --cpus="1" \
+	--memory="8g" \
+	 --cpus="4" \
 	--publish $PORT:$PORT \
 	$IMAGE_NAME
