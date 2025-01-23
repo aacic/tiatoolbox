@@ -1,7 +1,7 @@
 FROM python:3.9-slim-bookworm
 
 
-LABEL org.opencontainers.image.source="https://github.com/stjude/proteinpaint" \
+LABEL org.opencontainers.image.source="https://github.com/aacic/tiatoolbox/" \
     org.opencontainers.image.version="latest"
 
 ARG PORT=5000
