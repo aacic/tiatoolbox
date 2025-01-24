@@ -1,7 +1,9 @@
 bind = "0.0.0.0:5000"
-workers = 1
-accesslog = "-"
-errorlog = "-"
-timeout = 300
+worker_class = "gthread"
+threads = 10  # Number of threads per worker
+workers = 1  # Number of worker processes
+accesslog = "-"  # Logs to stdout
+errorlog = "-"  # Logs to stderr
+timeout = 300  # Keep this high if your HTTP requests take a long time
 graceful_timeout = 300
 keepalive = 5
