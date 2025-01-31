@@ -4,20 +4,15 @@ import logging
 
 from flask_cors import CORS
 
-from tiatoolbox.visualization import TileServer
+from tiatoolbox.visualization.statelesstileserver import StatelessTileServer
 from tiatoolbox.wsicore import WSIReader
 
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("aiohttp").setLevel(logging.DEBUG)
 logging.getLogger("aiohttp.client").setLevel(logging.DEBUG)
 
-
-
 # Initialize and run the TileServer
-tile_server = TileServer(
-    title="Tiatoolbox TileServer",
-    layers={},
-)
+tile_server = StatelessTileServer()
 CORS(tile_server, send_wildcard=True)
 
 
