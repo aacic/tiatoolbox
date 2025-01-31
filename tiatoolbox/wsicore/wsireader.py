@@ -4247,7 +4247,7 @@ class TIFFWSIReader(WSIReader):
 
 
 class FsspecJsonReader(WSIReader):
-    """Define Zarr Tiff WSI Reader."""
+    """Define FsspecJsonReader."""
 
     def __init__(
         self: FsspecJsonReader,
