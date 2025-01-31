@@ -379,7 +379,7 @@ class WSIReader:
         WSIReader.verify_supported_wsi(input_path)
 
         if is_zarr_tiff_fsspec(input_path):
-            return FsspecJsonReader(input_path, mpp=mpp, power=power)
+            return FsspecJsonWSIReader(input_path, mpp=mpp, power=power)
 
         # Handle special cases first (DICOM, Zarr/NGFF, OME-TIFF)
         if is_dicom(input_path):
@@ -4246,11 +4246,11 @@ class TIFFWSIReader(WSIReader):
         return im_region
 
 
-class FsspecJsonReader(WSIReader):
+class FsspecJsonWSIReader(WSIReader):
     """Define FsspecJsonReader."""
 
     def __init__(
-        self: FsspecJsonReader,
+        self: FsspecJsonWSIReader,
         input_img: str | Path | np.ndarray,
         mpp: tuple[Number, Number] | None = None,
         power: Number | None = None,
@@ -4300,7 +4300,7 @@ class FsspecJsonReader(WSIReader):
             )
         )
 
-    def _canonical_shape(self: FsspecJsonReader, shape: IntPair) -> tuple:
+    def _canonical_shape(self: FsspecJsonWSIReader, shape: IntPair) -> tuple:
         # Copy/paste from TIFFWSIReader, clean it up
         """Make a level shape tuple in YXS order.
 
@@ -4320,7 +4320,7 @@ class FsspecJsonReader(WSIReader):
         msg = f"Unsupported axes `{self._axes}`."
         raise ValueError(msg)
 
-    def _info(self: FsspecJsonReader) -> WSIMeta:
+    def _info(self: FsspecJsonWSIReader) -> WSIMeta:
         """TIFF metadata constructor.
 
         Returns:
@@ -4357,7 +4357,7 @@ class FsspecJsonReader(WSIReader):
         )
 
     def read_rect(
-        self: FsspecJsonReader,
+        self: FsspecJsonWSIReader,
         location: IntPair,
         size: IntPair,
         resolution: Resolution = 0,
@@ -4595,7 +4595,7 @@ class FsspecJsonReader(WSIReader):
         return utils.transforms.background_composite(image=im_region, alpha=False)
 
     def read_bounds(
-        self: FsspecJsonReader,
+        self: FsspecJsonWSIReader,
         bounds: IntBounds,
         resolution: Resolution = 0,
         units: Units = "level",
