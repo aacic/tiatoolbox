@@ -4247,7 +4247,7 @@ class TIFFWSIReader(WSIReader):
 
 
 class FsspecJsonWSIReader(WSIReader):
-    """Define FsspecJsonReader."""
+    """Define FsspecJsonWSIReader."""
 
     def __init__(
         self: FsspecJsonWSIReader,
