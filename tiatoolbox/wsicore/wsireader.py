@@ -46,20 +46,6 @@ MIN_NGFF_VERSION = Version("0.4")
 MAX_NGFF_VERSION = Version("0.4")
 
 
-def is_zarr_tiff_fsspec(path: Path) -> bool:
-    """Check if the input path ends with a .json extension.
-
-    Args:
-        path (Path): Path to the file to check.
-
-    # TODO extend logic and verify that json file is a fsspec tiff file
-    Returns:
-        bool: True if the file ends with a .json  extension.
-    """
-    path = Path(path)
-    return path.suffix.lower() in ".json"
-
-
 def is_dicom(path: Path) -> bool:
     """Check if the input is a DICOM file.
 
@@ -378,15 +364,18 @@ class WSIReader:
         input_path = Path(input_img)
         WSIReader.verify_supported_wsi(input_path)
 
-        if is_zarr_tiff_fsspec(input_path):
-            return FsspecJsonWSIReader(input_path, mpp=mpp, power=power)
-
         # Handle special cases first (DICOM, Zarr/NGFF, OME-TIFF)
         if is_dicom(input_path):
             return DICOMWSIReader(input_path, mpp=mpp, power=power)
 
         _, _, suffixes = utils.misc.split_path_name_ext(input_path)
         last_suffix = suffixes[-1]
+
+        if WSIReader.is_valid_zarr_fsspec(input_path):
+            msg = f"File {input_path} should be a valid fsspec JSON zarr v2."
+            raise FileNotSupportedError(msg)
+
+            return FsspecJsonWSIReader(input_path, mpp=mpp, power=power)
 
         if last_suffix == ".db":
             return AnnotationStoreReader(input_path, **kwargs)
@@ -418,6 +407,49 @@ class WSIReader:
 
         # Try openslide last
         return OpenSlideWSIReader(input_path, mpp=mpp, power=power)
+
+    @staticmethod
+    def is_valid_zarr_fsspec(path: Path) -> bool:
+        """Check if the input path is a valid Zarr fsspec JSON file.
+
+        Check if the file is a valid Zarr fsspec JSON file with Zarr format version 2.
+
+        Args:
+            path (Path): Path to the file to check.
+
+        Returns:
+            bool: True if the file is a valid Zarr fsspec JSON file
+            with Zarr format version 2.
+        """
+        path = Path(path)
+
+        if path.suffix.lower() != ".json":
+            logger.error("File does not have a .json extension.")
+            return False
+
+        try:
+            with path.open("r") as file:
+                data = json.load(file)
+
+            # Check if ".zgroup" exists and is a valid JSON string
+            if ".zgroup" not in data:
+                logger.error("Missing .zgroup key.")
+                return False
+
+            zgroup_content = json.loads(data[".zgroup"])
+            zarr_format_version = 2
+            if zgroup_content.get("zarr_format") != zarr_format_version:
+                logger.error("zarr_format is not %d.", zarr_format_version)
+                return False
+
+            return True  # noqa: TRY300
+
+        except json.JSONDecodeError as e:
+            logger.error("Invalid JSON file: %s", e)
+            return False
+        except (OSError, ValueError) as e:
+            logger.error("An error occurred: %s", e)
+            return False
 
     @staticmethod
     def verify_supported_wsi(input_path: Path) -> None:
