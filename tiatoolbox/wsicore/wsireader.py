@@ -372,9 +372,6 @@ class WSIReader:
         last_suffix = suffixes[-1]
 
         if WSIReader.is_valid_zarr_fsspec(input_path):
-            msg = f"File {input_path} should be a valid fsspec JSON zarr v2."
-            raise FileNotSupportedError(msg)
-
             return FsspecJsonWSIReader(input_path, mpp=mpp, power=power)
 
         if last_suffix == ".db":
