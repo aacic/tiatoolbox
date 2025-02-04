@@ -4310,7 +4310,7 @@ class FsspecJsonWSIReader(WSIReader):
 
             # Basic validation for fsspec Zarr JSON structure
             if not isinstance(data, dict) and ".zattrs" in data:
-                logger.error(f"Field .zattrs missing in '{file_path}'.")
+                logger.error("Field .zattrs missing in '%s'.", file_path)
                 return False
 
             return True  # noqa: TRY300
