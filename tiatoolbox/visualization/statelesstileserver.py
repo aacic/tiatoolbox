@@ -9,13 +9,12 @@ from tiatoolbox.wsicore import WSIReader
 
 
 class StatelessTileServer(Flask):
-
     def __init__(self):
         super().__init__(__name__)
         self.reader = None
         self.reader_lock = threading.Lock()  # Lock for thread safety
         self.route(
-            "/tileserver/layer/<layer>/<session_id>/zoomify/TileGroup<int:tile_group>/"
+            "/tileserver/layer/<layer>/<sample_id>/zoomify/TileGroup<int:tile_group>/"
             "<int:z>-<int:x>-<int:y>@<int:res>x.jpg",
         )(
             self.zoomify,
@@ -24,7 +23,7 @@ class StatelessTileServer(Flask):
     def zoomify(
         self,
         layer: str,
-        session_id: str,
+        sample_id: str,
         tile_group: int,  # skipcq: PYL-W0613  #noqa: ARG002
         z: int,
         x: int,
@@ -82,8 +81,5 @@ class StatelessTileServer(Flask):
         if self.reader is None:
             with self.reader_lock:  # Ensure only one thread initializes it
                 if self.reader is None:  # Double-checked locking
-                    self.reader = WSIReader.open(
-                        Path(
-                            "/path/to/_fsspec.json")
-                    )
+                    self.reader = WSIReader.open(Path("/path/to/_fsspec.json"))
         return self.reader
