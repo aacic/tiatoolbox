@@ -371,7 +371,7 @@ class WSIReader:
         _, _, suffixes = utils.misc.split_path_name_ext(input_path)
         last_suffix = suffixes[-1]
 
-        if WSIReader.is_valid_zarr_fsspec(input_path):
+        if FsspecJsonWSIReader.is_valid_zarr_fsspec(input_path):
             return FsspecJsonWSIReader(input_path, mpp=mpp, power=power)
 
         if last_suffix == ".db":
@@ -404,49 +404,6 @@ class WSIReader:
 
         # Try openslide last
         return OpenSlideWSIReader(input_path, mpp=mpp, power=power)
-
-    @staticmethod
-    def is_valid_zarr_fsspec(path: Path) -> bool:
-        """Check if the input path is a valid Zarr fsspec JSON file.
-
-        Check if the file is a valid Zarr fsspec JSON file with Zarr format version 2.
-
-        Args:
-            path (Path): Path to the file to check.
-
-        Returns:
-            bool: True if the file is a valid Zarr fsspec JSON file
-            with Zarr format version 2.
-        """
-        path = Path(path)
-
-        if path.suffix.lower() != ".json":
-            logger.error("File does not have a .json extension.")
-            return False
-
-        try:
-            with path.open("r") as file:
-                data = json.load(file)
-
-            # Check if ".zgroup" exists and is a valid JSON string
-            if ".zgroup" not in data:
-                logger.error("Missing .zgroup key.")
-                return False
-
-            zgroup_content = json.loads(data[".zgroup"])
-            zarr_format_version = 2
-            if zgroup_content.get("zarr_format") != zarr_format_version:
-                logger.error("zarr_format is not %d.", zarr_format_version)
-                return False
-
-            return True  # noqa: TRY300
-
-        except json.JSONDecodeError as e:
-            logger.error("Invalid JSON file: %s", e)
-            return False
-        except (OSError, ValueError) as e:
-            logger.error("An error occurred: %s", e)
-            return False
 
     @staticmethod
     def verify_supported_wsi(input_path: Path) -> None:
@@ -4328,6 +4285,42 @@ class FsspecJsonWSIReader(WSIReader):
                 key=lambda x: -np.prod(self._canonical_shape(x[1].array.shape[:2])),
             )
         )
+
+    @staticmethod
+    def is_valid_zarr_fsspec(file_path: str) -> bool:
+        """Check if the input path is a valid Zarr fsspec JSON file.
+
+        Check if the file is a valid Zarr fsspec JSON file.
+
+        Args:
+            file_path: str Path to the file to check.
+
+        Returns:
+            bool: True if the file is a valid Zarr fsspec JSON file
+        """
+        path = Path(file_path)
+
+        if path.suffix.lower() != ".json":
+            logger.error("File does not have a .json extension.")
+            return False
+
+        try:
+            with fsspec.open(file_path, "r") as file:
+                data = json.load(file)
+
+            # Basic validation for fsspec Zarr JSON structure
+            if not isinstance(data, dict) and ".zattrs" in data:
+                logger.error(f"Field .zattrs missing in '{file_path}'.")
+                return False
+
+            return True  # noqa: TRY300
+
+        except json.JSONDecodeError as e:
+            logger.error("Invalid JSON file: %s", e)
+            return False
+        except (OSError, ValueError) as e:
+            logger.error("An error occurred: %s", e)
+            return False
 
     def _canonical_shape(self: FsspecJsonWSIReader, shape: IntPair) -> tuple:
         # Copy/paste from TIFFWSIReader, clean it up

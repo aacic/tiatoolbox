@@ -27,7 +27,7 @@ from skimage.registration import phase_cross_correlation
 
 from tiatoolbox import cli, utils
 from tiatoolbox.annotation import SQLiteStore
-from tiatoolbox.utils import imread
+from tiatoolbox.utils import imread, tiff_fsspec
 from tiatoolbox.utils.exceptions import FileNotSupportedError
 from tiatoolbox.utils.magic import is_sqlite3
 from tiatoolbox.utils.transforms import imresize, locsize2bounds
@@ -37,6 +37,7 @@ from tiatoolbox.wsicore.wsireader import (
     AnnotationStoreReader,
     ArrayView,
     DICOMWSIReader,
+    FsspecJsonWSIReader,
     JP2WSIReader,
     NGFFWSIReader,
     OpenSlideWSIReader,
@@ -2812,3 +2813,27 @@ def test_read_multi_channel(source_image: Path) -> None:
     assert region.shape == (100, 50, (new_img_array.shape[-1]))
     assert np.abs(np.median(region.astype(int) - target.astype(int))) == 0
     assert np.abs(np.mean(region.astype(int) - target.astype(int))) < 0.2
+
+
+def test_generate_fsspec_json_file_and_validate(
+    sample_svs: Path, tmp_path: Path
+) -> None:
+    """Test generate fsspec json file file and validate it."""
+    file_types = ("*.svs",)
+
+    files_all = utils.misc.grab_files_from_dir(
+        input_path=Path(sample_svs).parent,
+        file_types=file_types,
+    )
+
+    svs_file_path = str(files_all[0])
+    json_file_path = str(tmp_path / "fsspec.json")
+    final_url = "https://example.com/some_id"
+
+    tiff_fsspec.main(svs_file_path, json_file_path, final_url)
+
+    assert Path(json_file_path).exists(), "Output JSON file was not created."
+
+    assert FsspecJsonWSIReader.is_valid_zarr_fsspec(
+        json_file_path
+    ), "FSSPEC JSON file is invalid."
