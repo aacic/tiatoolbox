@@ -19,7 +19,7 @@ import pandas as pd
 import tifffile
 import zarr
 from defusedxml import ElementTree
-from imagecodecs.numcodecs import Jpeg
+from imagecodecs.numcodecs import Jpeg, Jpeg2k
 from numcodecs import register_codec
 from packaging.version import Version
 from PIL import Image
@@ -4244,8 +4244,13 @@ class FsspecJsonWSIReader(WSIReader):
     ) -> None:
         """Initialize :class:`ZarrTIFFWSIReader`."""
         super().__init__(input_img=input_img, mpp=mpp, power=power)
+
         jpeg_codec = Jpeg()
         register_codec(jpeg_codec, "imagecodecs_jpeg")
+
+        jpeg2k_codec = Jpeg2k()
+        register_codec(jpeg2k_codec, "imagecodecs_jpeg2k")
+
         mapper = fsspec.get_mapper(
             "reference://", fo=str(input_img), target_protocol="file"
         )
