@@ -12,80 +12,16 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from tifffile import TiffFile, TiffPages, tiff2fsspec
+from tifffile import TiffFile, tiff2fsspec
 
-if TYPE_CHECKING:
-    from numbers import Number
+from tiatoolbox.wsicore.wsireader import TIFFWSIReaderDelegate
 
 # Constants
 EXPECTED_KEY_VALUE_PAIRS = 2
 EXPECTED_ARG_COUNT = 4
 URL_PLACEHOLDER = "https://replace.me/"
-
-
-def _parse_svs_metadata(pages: TiffPages) -> dict[str, Any]:
-    # Copy/paste from TIFFWSIReader._parse_svs_metadata, extract to the util method.
-    """Extract SVS-specific metadata."""
-    raw = {}
-    mpp: list[float] | None = None
-    objective_power: float | None = None
-    vendor = "Aperio"
-
-    description = pages[0].description
-    raw["Description"] = description
-    parts = description.split("|")
-    description_headers, key_value_pairs = parts[0], parts[1:]
-    description_headers = description_headers.split(";")
-
-    software, photometric_info = description_headers[0].splitlines()
-    raw["Software"] = software
-    raw["Photometric Info"] = photometric_info
-
-    def parse_svs_tag(string: str) -> tuple[str, Number | str | datetime]:
-        """Parse SVS key-value string."""
-        pair = string.split("=")
-        if len(pair) != EXPECTED_KEY_VALUE_PAIRS:
-            invalid_metadata_msg = (
-                "Invalid metadata. Expected string of the format 'key=value'."
-            )
-            raise ValueError(invalid_metadata_msg)
-
-        key, value_string = pair
-        key = key.strip()
-        value_string = value_string.strip()
-
-        def us_date(string: str) -> datetime:
-            """Return datetime parsed according to US date format."""
-            return datetime.strptime(string, r"%m/%d/%y").astimezone()
-
-        def time(string: str) -> datetime:
-            """Return datetime parsed according to HMS format."""
-            return datetime.strptime(string, r"%H:%M:%S").astimezone()
-
-        casting_precedence = [us_date, time, int, float]
-        value: Number | str | datetime = value_string
-        for cast in casting_precedence:
-            try:
-                value = cast(value_string)
-                break
-            except ValueError:
-                continue
-
-        return key, value
-
-    svs_tags = dict(parse_svs_tag(string) for string in key_value_pairs)
-    raw["SVS Tags"] = svs_tags
-    mpp = [svs_tags.get("MPP")] * 2 if svs_tags.get("MPP") is not None else None
-    objective_power = svs_tags.get("AppMag")
-
-    return {
-        "objective_power": objective_power,
-        "vendor": vendor,
-        "mpp": mpp,
-        "raw": raw,
-    }
 
 
 def convert_metadata(metadata: dict) -> dict:
@@ -121,7 +57,7 @@ def main(svs_file_path: str, json_file_path: str, final_url: str) -> None:
     tiff2fsspec(svs_file_path, url=URL_PLACEHOLDER, out=json_file_path)
 
     # Parse SVS metadata
-    metadata = _parse_svs_metadata(pages=tiff_file_pages)
+    metadata = TIFFWSIReaderDelegate.parse_svs_metadata(pages=tiff_file_pages)
 
     # Convert metadata to JSON-compatible format
     metadata_serializable = convert_metadata(metadata)

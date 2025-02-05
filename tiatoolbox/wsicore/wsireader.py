@@ -23,6 +23,7 @@ from imagecodecs.numcodecs import Jpeg, Jpeg2k
 from numcodecs import register_codec
 from packaging.version import Version
 from PIL import Image
+from tifffile import TiffPages
 
 from tiatoolbox import logger, utils
 from tiatoolbox.annotation import AnnotationStore, SQLiteStore
@@ -3543,88 +3544,6 @@ class TIFFWSIReader(WSIReader):
         )
         self.tiff_reader_delegate = TIFFWSIReaderDelegate(self, self.level_arrays)
 
-    def _parse_svs_metadata(self: TIFFWSIReader) -> dict:
-        """Extract SVS specific metadata.
-
-        Returns:
-            dict:
-                Dictionary of kwargs for WSIMeta.
-
-        """
-        raw = {}
-        mpp = None
-        objective_power = None
-        vendor = "Aperio"
-
-        description = self.tiff.pages[0].description
-        raw["Description"] = description
-        parts = description.split("|")
-        description_headers, key_value_pairs = parts[0], parts[1:]
-        description_headers = description_headers.split(";")
-
-        software, photometric_info = description_headers[0].splitlines()
-        raw["Software"] = software
-        raw["Photometric Info"] = photometric_info
-
-        def parse_svs_tag(string: str) -> tuple[str, Number | str]:
-            """Parse SVS key-value string.
-
-            Infers type(s) of data by trial and error with a fallback to
-            the original string type.
-
-            Args:
-                string (str):
-                    Key-value string in SVS format: "key=value".
-
-            Returns:
-                tuple:
-                    Key-value pair.
-
-            """
-            pair = string.split("=")
-            if len(pair) != 2:  # noqa: PLR2004
-                msg = "Invalid metadata. Expected string of the format 'key=value'."
-                raise ValueError(
-                    msg,
-                )
-            key, value_string = pair
-            key = key.strip()
-            value_string = value_string.strip()
-
-            def us_date(string: str) -> datetime:
-                """Return datetime parsed according to US date format."""
-                return datetime.strptime(string, r"%m/%d/%y").astimezone()
-
-            def time(string: str) -> datetime:
-                """Return datetime parsed according to HMS format."""
-                return datetime.strptime(string, r"%H:%M:%S").astimezone()
-
-            casting_precedence = [us_date, time, int, float]
-            value = value_string
-            for cast in casting_precedence:
-                try:
-                    value = cast(value_string)
-                except ValueError:  # noqa: PERF203
-                    continue
-                else:
-                    return key, value
-
-            return key, value
-
-        svs_tags = dict(parse_svs_tag(string) for string in key_value_pairs)
-        raw["SVS Tags"] = svs_tags
-        mpp = svs_tags.get("MPP")
-        if mpp is not None:
-            mpp = [mpp] * 2
-        objective_power = svs_tags.get("AppMag")
-
-        return {
-            "objective_power": objective_power,
-            "vendor": vendor,
-            "mpp": mpp,
-            "raw": raw,
-        }
-
     def _get_ome_xml(self: TIFFWSIReader) -> ElementTree.Element:
         """Parse OME-XML from the description of the first IFD (page).
 
@@ -3804,7 +3723,7 @@ class TIFFWSIReader(WSIReader):
         }
 
         if self.tiff.is_svs:
-            filetype_params = self._parse_svs_metadata()
+            filetype_params = TIFFWSIReaderDelegate.parse_svs_metadata()
         elif self.tiff.is_ome:
             filetype_params = self._parse_ome_metadata()
         else:
@@ -4079,6 +3998,89 @@ class TIFFWSIReaderDelegate:
         """
         self.reader = reader
         self.level_arrays = level_arrays
+
+    @staticmethod
+    def parse_svs_metadata(pages: TiffPages) -> dict:
+        """Extract SVS specific metadata.
+
+        Returns:
+            dict:
+                Dictionary of kwargs for WSIMeta.
+
+        """
+        raw = {}
+        mpp = None
+        objective_power = None
+        vendor = "Aperio"
+
+        description = pages[0].description
+        raw["Description"] = description
+        parts = description.split("|")
+        description_headers, key_value_pairs = parts[0], parts[1:]
+        description_headers = description_headers.split(";")
+
+        software, photometric_info = description_headers[0].splitlines()
+        raw["Software"] = software
+        raw["Photometric Info"] = photometric_info
+
+        def parse_svs_tag(string: str) -> tuple[str, Number | str]:
+            """Parse SVS key-value string.
+
+            Infers type(s) of data by trial and error with a fallback to
+            the original string type.
+
+            Args:
+                string (str):
+                    Key-value string in SVS format: "key=value".
+
+            Returns:
+                tuple:
+                    Key-value pair.
+
+            """
+            pair = string.split("=")
+            if len(pair) != 2:  # noqa: PLR2004
+                msg = "Invalid metadata. Expected string of the format 'key=value'."
+                raise ValueError(
+                    msg,
+                )
+            key, value_string = pair
+            key = key.strip()
+            value_string = value_string.strip()
+
+            def us_date(string: str) -> datetime:
+                """Return datetime parsed according to US date format."""
+                return datetime.strptime(string, r"%m/%d/%y").astimezone()
+
+            def time(string: str) -> datetime:
+                """Return datetime parsed according to HMS format."""
+                return datetime.strptime(string, r"%H:%M:%S").astimezone()
+
+            casting_precedence = [us_date, time, int, float]
+            value = value_string
+            for cast in casting_precedence:
+                try:
+                    value = cast(value_string)
+                except ValueError:  # noqa: PERF203
+                    continue
+                else:
+                    return key, value
+
+            return key, value
+
+        svs_tags = dict(parse_svs_tag(string) for string in key_value_pairs)
+        raw["SVS Tags"] = svs_tags
+        mpp = svs_tags.get("MPP")
+        if mpp is not None:
+            mpp = [mpp] * 2
+        objective_power = svs_tags.get("AppMag")
+
+        return {
+            "objective_power": objective_power,
+            "vendor": vendor,
+            "mpp": mpp,
+            "raw": raw,
+        }
 
     @staticmethod
     def canonical_shape(axes: str, shape: tuple[int, int]) -> tuple[int, int]:
