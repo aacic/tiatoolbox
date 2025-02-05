@@ -757,7 +757,7 @@ class WSIReader:
         output = tuple(np.ceil(v).astype(np.int64) for v in output)
         return (read_level, read_level_to_resolution_scale_factor, *output)
 
-    def _bounds_at_resolution_to_baseline(
+    def bounds_at_resolution_to_baseline(
         self: WSIReader,
         bounds: Bounds,
         resolution: Resolution,
@@ -826,7 +826,7 @@ class WSIReader:
             _,
             wsi_shape_at_resolution,
             _,
-        ) = self._find_read_bounds_params(
+        ) = self.find_read_bounds_params(
             [0, 0, *list(wsi_shape_at_baseline)],
             resolution,
             units,
@@ -834,7 +834,7 @@ class WSIReader:
         )
         return wsi_shape_at_resolution
 
-    def _find_read_bounds_params(
+    def find_read_bounds_params(
         self: WSIReader,
         bounds: Bounds,
         resolution: Resolution,
@@ -2100,7 +2100,7 @@ class OpenSlideWSIReader(WSIReader):
         # convert from requested to `baseline`
         bounds_at_baseline = bounds
         if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
+            bounds_at_baseline = self.bounds_at_resolution_to_baseline(
                 bounds,
                 resolution,
                 units,
@@ -2115,7 +2115,7 @@ class OpenSlideWSIReader(WSIReader):
                 bounds_at_read_level,
                 _,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -2127,7 +2127,7 @@ class OpenSlideWSIReader(WSIReader):
                 bounds_at_read_level,
                 size_at_requested,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -2638,7 +2638,7 @@ class JP2WSIReader(WSIReader):
         """
         bounds_at_baseline = bounds
         if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
+            bounds_at_baseline = self.bounds_at_resolution_to_baseline(
                 bounds,
                 resolution,
                 units,
@@ -2653,7 +2653,7 @@ class JP2WSIReader(WSIReader):
                 _,
                 _,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -2665,7 +2665,7 @@ class JP2WSIReader(WSIReader):
                 _,  # bounds_at_read_level,
                 size_at_requested,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -3348,7 +3348,7 @@ class VirtualWSIReader(WSIReader):
         # convert from requested to `baseline`
         bounds_at_baseline = bounds
         if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
+            bounds_at_baseline = self.bounds_at_resolution_to_baseline(
                 bounds,
                 resolution,
                 units,
@@ -3359,14 +3359,14 @@ class VirtualWSIReader(WSIReader):
             # because the rounding error at `bounds_at_baseline` leads to
             # different `size_at_requested` (keeping same read resolution
             # but base image is of different scale)
-            _, _, _, post_read_scale = self._find_read_bounds_params(
+            _, _, _, post_read_scale = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
             )
         else:
             # * Find parameters for optimal read
-            _, _, size_at_requested, post_read_scale = self._find_read_bounds_params(
+            _, _, size_at_requested, post_read_scale = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -3475,7 +3475,7 @@ class DelegateWSIReader:
         self.reader = reader
         self.level_arrays = level_arrays
 
-    def _canonical_shape(self, axes: str, shape: tuple[int, int]) -> tuple[int, int]:
+    def canonical_shape(self, axes: str, shape: tuple[int, int]) -> tuple[int, int]:
         """Make a level shape tuple in YXS order.
 
         Args:
@@ -3728,18 +3728,177 @@ class DelegateWSIReader:
 
         return utils.transforms.background_composite(image=im_region, alpha=False)
 
-    def read_bounds(self, bounds: IntBounds) -> np.ndarray:
-        """Handle reading a bounded region.
+    def read_bounds(
+        self: DelegateWSIReader,
+        bounds: IntBounds,
+        resolution: Resolution = 0,
+        units: Units = "level",
+        interpolation: str = "optimise",
+        pad_mode: str = "constant",
+        pad_constant_values: int | IntPair = 0,
+        coord_space: str = "baseline",
+        **kwargs: dict,
+    ) -> np.ndarray:
+        """Read a region of the whole slide image within given bounds.
+
+        Bounds are in terms of the baseline image (level 0  / maximum
+        resolution).
+
+        Reads can be performed at different resolutions by supplying a
+        pair of arguments for the resolution and the units of
+        resolution. If metadata does not specify `mpp` or
+        `objective_power` then `baseline` units should be selected with
+        resolution 1.0
+
+        The output image size may be different to the width and height
+        of the bounds as the resolution will affect this. To read a
+        region with a fixed output image size see :func:`read_rect`.
 
         Args:
-            bounds (tuple): The (x1, y1, x2, y2) bounds of the region.
+            bounds (IntBounds):
+                By default, this is a tuple of (start_x, start_y, end_x,
+                end_y) i.e. (left, top, right, bottom) of the region in
+                baseline reference frame. However, with
+                `coord_space="resolution"`, the bound is expected to be
+                at the requested resolution system.
+            resolution (Resolution):
+                Resolution at which to read the image, default = 0.
+                Either a single number or a sequence of two numbers for
+                x and y are valid. This value is in terms of the
+                corresponding units. For example: resolution=0.5 and
+                units="mpp" will read the slide at 0.5 microns
+                per-pixel, and resolution=3, units="level" will read at
+                level at pyramid level / resolution layer 3.
+            units (Units):
+                Units of resolution, default="level". Supported units
+                are: microns per pixel (mpp), objective power (power),
+                pyramid / resolution level (level), pixels per baseline
+                pixel (baseline).
+            interpolation (str):
+                Method to use when resampling the output image. Possible
+                values are "linear", "cubic", "lanczos", "area", and
+                "optimise". Defaults to 'optimise' which will use cubic
+                interpolation for upscaling and area interpolation for
+                downscaling to avoid moiré patterns.
+            pad_mode (str):
+                Method to use when padding at the edges of the image.
+                Defaults to 'constant'. See :func:`numpy.pad` for
+                available modes.
+            pad_constant_values (int, tuple(int)):
+                Constant values to use when padding with constant pad mode.
+                Passed to the :func:`numpy.pad` `constant_values` argument.
+                Default is 0.
+            coord_space (str):
+                Defaults to "baseline". This is a flag to indicate if
+                the input `bounds` is in the baseline coordinate system
+                ("baseline") or is in the requested resolution system
+                ("resolution").
+            **kwargs (dict):
+                Extra key-word arguments for reader specific parameters.
+                Currently only used by :obj:`VirtualWSIReader`. See
+                class docstrings for more information.
 
         Returns:
-            np.ndarray: Simulated image array.
+            :class:`numpy.ndarray`:
+                Array of size MxNx3 M=end_h-start_h, N=end_w-start_w
+
+        Examples:
+            >>> from tiatoolbox.wsicore.wsireader import WSIReader
+            >>> from matplotlib import pyplot as plt
+            >>> wsi = WSIReader.open(input_img="./CMU-1.ndpi")
+            >>> # Read a region at level 0 (baseline / full resolution)
+            >>> bounds = [1000, 2000, 2000, 3000]
+            >>> img = wsi.read_bounds(bounds)
+            >>> plt.imshow(img)
+            >>> # This could also be written more verbosely as follows
+            >>> img = wsi.read_bounds(
+            ...     bounds,
+            ...     resolution=0,
+            ...     units="level",
+            ... )
+            >>> plt.imshow(img)
+
+        Note: The field of view remains the same as resolution is varied
+        when using :func:`read_bounds`.
+
+        .. figure:: ../images/read_bounds_tissue.png
+            :width: 512
+            :alt: Diagram illustrating read_bounds
+
+        This is because the bounds are in the baseline (level 0)
+        reference frame. Therefore, varying the resolution does not
+        change what is visible within the output image.
+
+        If the WSI does not have a resolution layer corresponding
+        exactly to the requested resolution (shown above in white with a
+        dashed outline), a larger resolution is downscaled to achieve
+        the correct requested output resolution.
+
+        If the requested resolution is higher than the baseline (maximum
+        resultion of the image), then bicubic interpolation is applied
+        to the output image.
+
         """
-        width = bounds[2] - bounds[0]
-        height = bounds[3] - bounds[1]
-        return np.zeros((height, width, 3))  # Simulated image data
+        bounds_at_baseline = bounds
+        if coord_space == "resolution":
+            bounds_at_baseline = self.reader.bounds_at_resolution_to_baseline(
+                bounds,
+                resolution,
+                units,
+            )
+            _, size_at_requested = utils.transforms.bounds2locsize(bounds)
+            # don't use the `output_size` (`size_at_requested`) here
+            # because the rounding error at `bounds_at_baseline` leads to
+            # different `size_at_requested` (keeping same read resolution
+            # but base image is of different scale)
+            (
+                read_level,
+                bounds_at_read_level,
+                _,
+                post_read_scale,
+            ) = self.reader.find_read_bounds_params(
+                bounds_at_baseline,
+                resolution=resolution,
+                units=units,
+            )
+        else:  # duplicated portion with VirtualReader, factoring out ?
+            # Find parameters for optimal read
+            (
+                read_level,
+                bounds_at_read_level,
+                size_at_requested,
+                post_read_scale,
+            ) = self.reader.find_read_bounds_params(
+                bounds_at_baseline,
+                resolution=resolution,
+                units=units,
+            )
+
+        im_region = utils.image.sub_pixel_read(
+            image=self.level_arrays[read_level],
+            bounds=bounds_at_read_level,
+            output_size=size_at_requested,
+            interpolation=interpolation,
+            pad_mode=pad_mode,
+            pad_constant_values=pad_constant_values,
+            read_kwargs=kwargs,
+            pad_at_baseline=False,
+        )
+
+        if coord_space == "resolution":
+            # do this to enforce output size is as defined by input bounds
+            im_region = utils.transforms.imresize(
+                img=im_region,
+                output_size=size_at_requested,
+            )
+        else:
+            im_region = utils.transforms.imresize(
+                img=im_region,
+                scale_factor=post_read_scale,
+                output_size=size_at_requested,
+            )
+
+        return im_region
 
 
 class TIFFWSIReader(WSIReader):
@@ -4145,166 +4304,17 @@ class TIFFWSIReader(WSIReader):
         coord_space: str = "baseline",
         **kwargs: dict,
     ) -> np.ndarray:
-        """Read a region of the whole slide image within given bounds.
-
-        Bounds are in terms of the baseline image (level 0  / maximum
-        resolution).
-
-        Reads can be performed at different resolutions by supplying a
-        pair of arguments for the resolution and the units of
-        resolution. If metadata does not specify `mpp` or
-        `objective_power` then `baseline` units should be selected with
-        resolution 1.0
-
-        The output image size may be different to the width and height
-        of the bounds as the resolution will affect this. To read a
-        region with a fixed output image size see :func:`read_rect`.
-
-        Args:
-            bounds (IntBounds):
-                By default, this is a tuple of (start_x, start_y, end_x,
-                end_y) i.e. (left, top, right, bottom) of the region in
-                baseline reference frame. However, with
-                `coord_space="resolution"`, the bound is expected to be
-                at the requested resolution system.
-            resolution (Resolution):
-                Resolution at which to read the image, default = 0.
-                Either a single number or a sequence of two numbers for
-                x and y are valid. This value is in terms of the
-                corresponding units. For example: resolution=0.5 and
-                units="mpp" will read the slide at 0.5 microns
-                per-pixel, and resolution=3, units="level" will read at
-                level at pyramid level / resolution layer 3.
-            units (Units):
-                Units of resolution, default="level". Supported units
-                are: microns per pixel (mpp), objective power (power),
-                pyramid / resolution level (level), pixels per baseline
-                pixel (baseline).
-            interpolation (str):
-                Method to use when resampling the output image. Possible
-                values are "linear", "cubic", "lanczos", "area", and
-                "optimise". Defaults to 'optimise' which will use cubic
-                interpolation for upscaling and area interpolation for
-                downscaling to avoid moiré patterns.
-            pad_mode (str):
-                Method to use when padding at the edges of the image.
-                Defaults to 'constant'. See :func:`numpy.pad` for
-                available modes.
-            pad_constant_values (int, tuple(int)):
-                Constant values to use when padding with constant pad mode.
-                Passed to the :func:`numpy.pad` `constant_values` argument.
-                Default is 0.
-            coord_space (str):
-                Defaults to "baseline". This is a flag to indicate if
-                the input `bounds` is in the baseline coordinate system
-                ("baseline") or is in the requested resolution system
-                ("resolution").
-            **kwargs (dict):
-                Extra key-word arguments for reader specific parameters.
-                Currently only used by :obj:`VirtualWSIReader`. See
-                class docstrings for more information.
-
-        Returns:
-            :class:`numpy.ndarray`:
-                Array of size MxNx3 M=end_h-start_h, N=end_w-start_w
-
-        Examples:
-            >>> from tiatoolbox.wsicore.wsireader import WSIReader
-            >>> from matplotlib import pyplot as plt
-            >>> wsi = WSIReader.open(input_img="./CMU-1.ndpi")
-            >>> # Read a region at level 0 (baseline / full resolution)
-            >>> bounds = [1000, 2000, 2000, 3000]
-            >>> img = wsi.read_bounds(bounds)
-            >>> plt.imshow(img)
-            >>> # This could also be written more verbosely as follows
-            >>> img = wsi.read_bounds(
-            ...     bounds,
-            ...     resolution=0,
-            ...     units="level",
-            ... )
-            >>> plt.imshow(img)
-
-        Note: The field of view remains the same as resolution is varied
-        when using :func:`read_bounds`.
-
-        .. figure:: ../images/read_bounds_tissue.png
-            :width: 512
-            :alt: Diagram illustrating read_bounds
-
-        This is because the bounds are in the baseline (level 0)
-        reference frame. Therefore, varying the resolution does not
-        change what is visible within the output image.
-
-        If the WSI does not have a resolution layer corresponding
-        exactly to the requested resolution (shown above in white with a
-        dashed outline), a larger resolution is downscaled to achieve
-        the correct requested output resolution.
-
-        If the requested resolution is higher than the baseline (maximum
-        resultion of the image), then bicubic interpolation is applied
-        to the output image.
-
-        """
-        bounds_at_baseline = bounds
-        if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
-                bounds,
-                resolution,
-                units,
-            )
-            _, size_at_requested = utils.transforms.bounds2locsize(bounds)
-            # don't use the `output_size` (`size_at_requested`) here
-            # because the rounding error at `bounds_at_baseline` leads to
-            # different `size_at_requested` (keeping same read resolution
-            # but base image is of different scale)
-            (
-                read_level,
-                bounds_at_read_level,
-                _,
-                post_read_scale,
-            ) = self._find_read_bounds_params(
-                bounds_at_baseline,
-                resolution=resolution,
-                units=units,
-            )
-        else:  # duplicated portion with VirtualReader, factoring out ?
-            # Find parameters for optimal read
-            (
-                read_level,
-                bounds_at_read_level,
-                size_at_requested,
-                post_read_scale,
-            ) = self._find_read_bounds_params(
-                bounds_at_baseline,
-                resolution=resolution,
-                units=units,
-            )
-
-        im_region = utils.image.sub_pixel_read(
-            image=self.level_arrays[read_level],
-            bounds=bounds_at_read_level,
-            output_size=size_at_requested,
-            interpolation=interpolation,
-            pad_mode=pad_mode,
-            pad_constant_values=pad_constant_values,
-            read_kwargs=kwargs,
-            pad_at_baseline=False,
+        """Delegate call."""
+        return self.delegate.read_bounds(
+            bounds,
+            resolution,
+            units,
+            interpolation,
+            pad_mode,
+            pad_constant_values,
+            coord_space,
+            **kwargs,
         )
-
-        if coord_space == "resolution":
-            # do this to enforce output size is as defined by input bounds
-            im_region = utils.transforms.imresize(
-                img=im_region,
-                output_size=size_at_requested,
-            )
-        else:
-            im_region = utils.transforms.imresize(
-                img=im_region,
-                scale_factor=post_read_scale,
-                output_size=size_at_requested,
-            )
-
-        return im_region
 
 
 class FsspecJsonWSIReader(WSIReader):
@@ -4403,24 +4413,8 @@ class FsspecJsonWSIReader(WSIReader):
             return False
 
     def _canonical_shape(self: FsspecJsonWSIReader, shape: IntPair) -> tuple:
-        # Copy/paste from TIFFWSIReader, clean it up
-        """Make a level shape tuple in YXS order.
-
-        Args:
-            shape (IntPair):
-                Input shape tuple.
-
-        Returns:
-            tuple:
-                Shape in YXS order.
-
-        """
-        if self._axes == "YXS":
-            return shape
-        if self._axes == "SYX":
-            return np.roll(shape, -1)
-        msg = f"Unsupported axes `{self._axes}`."
-        raise ValueError(msg)
+        """Delegates call to the delegate."""
+        return self.delegate.canonical_shape(self._axes, shape)
 
     def _info(self: FsspecJsonWSIReader) -> WSIMeta:
         """TIFF metadata constructor.
@@ -4493,167 +4487,17 @@ class FsspecJsonWSIReader(WSIReader):
         coord_space: str = "baseline",
         **kwargs: dict,
     ) -> np.ndarray:
-        # Copy/paste from TIFFWSIReader, clean it up
-        """Read a region of the whole slide image within given bounds.
-
-        Bounds are in terms of the baseline image (level 0  / maximum
-        resolution).
-
-        Reads can be performed at different resolutions by supplying a
-        pair of arguments for the resolution and the units of
-        resolution. If metadata does not specify `mpp` or
-        `objective_power` then `baseline` units should be selected with
-        resolution 1.0
-
-        The output image size may be different to the width and height
-        of the bounds as the resolution will affect this. To read a
-        region with a fixed output image size see :func:`read_rect`.
-
-        Args:
-            bounds (IntBounds):
-                By default, this is a tuple of (start_x, start_y, end_x,
-                end_y) i.e. (left, top, right, bottom) of the region in
-                baseline reference frame. However, with
-                `coord_space="resolution"`, the bound is expected to be
-                at the requested resolution system.
-            resolution (Resolution):
-                Resolution at which to read the image, default = 0.
-                Either a single number or a sequence of two numbers for
-                x and y are valid. This value is in terms of the
-                corresponding units. For example: resolution=0.5 and
-                units="mpp" will read the slide at 0.5 microns
-                per-pixel, and resolution=3, units="level" will read at
-                level at pyramid level / resolution layer 3.
-            units (Units):
-                Units of resolution, default="level". Supported units
-                are: microns per pixel (mpp), objective power (power),
-                pyramid / resolution level (level), pixels per baseline
-                pixel (baseline).
-            interpolation (str):
-                Method to use when resampling the output image. Possible
-                values are "linear", "cubic", "lanczos", "area", and
-                "optimise". Defaults to 'optimise' which will use cubic
-                interpolation for upscaling and area interpolation for
-                downscaling to avoid moiré patterns.
-            pad_mode (str):
-                Method to use when padding at the edges of the image.
-                Defaults to 'constant'. See :func:`numpy.pad` for
-                available modes.
-            pad_constant_values (int, tuple(int)):
-                Constant values to use when padding with constant pad mode.
-                Passed to the :func:`numpy.pad` `constant_values` argument.
-                Default is 0.
-            coord_space (str):
-                Defaults to "baseline". This is a flag to indicate if
-                the input `bounds` is in the baseline coordinate system
-                ("baseline") or is in the requested resolution system
-                ("resolution").
-            **kwargs (dict):
-                Extra key-word arguments for reader specific parameters.
-                Currently only used by :obj:`VirtualWSIReader`. See
-                class docstrings for more information.
-
-        Returns:
-            :class:`numpy.ndarray`:
-                Array of size MxNx3 M=end_h-start_h, N=end_w-start_w
-
-        Examples:
-            >>> from tiatoolbox.wsicore.wsireader import WSIReader
-            >>> from matplotlib import pyplot as plt
-            >>> wsi = WSIReader.open(input_img="./CMU-1.ndpi")
-            >>> # Read a region at level 0 (baseline / full resolution)
-            >>> bounds = [1000, 2000, 2000, 3000]
-            >>> img = wsi.read_bounds(bounds)
-            >>> plt.imshow(img)
-            >>> # This could also be written more verbosely as follows
-            >>> img = wsi.read_bounds(
-            ...     bounds,
-            ...     resolution=0,
-            ...     units="level",
-            ... )
-            >>> plt.imshow(img)
-
-        Note: The field of view remains the same as resolution is varied
-        when using :func:`read_bounds`.
-
-        .. figure:: ../images/read_bounds_tissue.png
-            :width: 512
-            :alt: Diagram illustrating read_bounds
-
-        This is because the bounds are in the baseline (level 0)
-        reference frame. Therefore, varying the resolution does not
-        change what is visible within the output image.
-
-        If the WSI does not have a resolution layer corresponding
-        exactly to the requested resolution (shown above in white with a
-        dashed outline), a larger resolution is downscaled to achieve
-        the correct requested output resolution.
-
-        If the requested resolution is higher than the baseline (maximum
-        resultion of the image), then bicubic interpolation is applied
-        to the output image.
-
-        """
-        bounds_at_baseline = bounds
-        if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
-                bounds,
-                resolution,
-                units,
-            )
-            _, size_at_requested = utils.transforms.bounds2locsize(bounds)
-            # don't use the `output_size` (`size_at_requested`) here
-            # because the rounding error at `bounds_at_baseline` leads to
-            # different `size_at_requested` (keeping same read resolution
-            # but base image is of different scale)
-            (
-                read_level,
-                bounds_at_read_level,
-                _,
-                post_read_scale,
-            ) = self._find_read_bounds_params(
-                bounds_at_baseline,
-                resolution=resolution,
-                units=units,
-            )
-        else:  # duplicated portion with VirtualReader, factoring out ?
-            # Find parameters for optimal read
-            (
-                read_level,
-                bounds_at_read_level,
-                size_at_requested,
-                post_read_scale,
-            ) = self._find_read_bounds_params(
-                bounds_at_baseline,
-                resolution=resolution,
-                units=units,
-            )
-
-        im_region = utils.image.sub_pixel_read(
-            image=self.level_arrays[read_level],
-            bounds=bounds_at_read_level,
-            output_size=size_at_requested,
-            interpolation=interpolation,
-            pad_mode=pad_mode,
-            pad_constant_values=pad_constant_values,
-            read_kwargs=kwargs,
-            pad_at_baseline=False,
+        """Delegate call."""
+        return self.delegate.read_bounds(
+            bounds,
+            resolution,
+            units,
+            interpolation,
+            pad_mode,
+            pad_constant_values,
+            coord_space,
+            **kwargs,
         )
-
-        if coord_space == "resolution":
-            # do this to enforce output size is as defined by input bounds
-            im_region = utils.transforms.imresize(
-                img=im_region,
-                output_size=size_at_requested,
-            )
-        else:
-            im_region = utils.transforms.imresize(
-                img=im_region,
-                scale_factor=post_read_scale,
-                output_size=size_at_requested,
-            )
-
-        return im_region
 
 
 class DICOMWSIReader(WSIReader):
@@ -5078,7 +4922,7 @@ class DICOMWSIReader(WSIReader):
         # convert from requested to `baseline`
         bounds_at_baseline = bounds
         if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
+            bounds_at_baseline = self.bounds_at_resolution_to_baseline(
                 bounds,
                 resolution,
                 units,
@@ -5093,7 +4937,7 @@ class DICOMWSIReader(WSIReader):
                 bounds_at_read_level,
                 _,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -5105,7 +4949,7 @@ class DICOMWSIReader(WSIReader):
                 bounds_at_read_level,
                 size_at_requested,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -5629,7 +5473,7 @@ class NGFFWSIReader(WSIReader):
         """
         bounds_at_baseline = bounds
         if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
+            bounds_at_baseline = self.bounds_at_resolution_to_baseline(
                 bounds,
                 resolution,
                 units,
@@ -5644,7 +5488,7 @@ class NGFFWSIReader(WSIReader):
                 _,
                 _,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -5656,7 +5500,7 @@ class NGFFWSIReader(WSIReader):
                 _,
                 size_at_requested,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -6181,7 +6025,7 @@ class AnnotationStoreReader(WSIReader):
         """
         bounds_at_baseline = bounds
         if coord_space == "resolution":
-            bounds_at_baseline = self._bounds_at_resolution_to_baseline(
+            bounds_at_baseline = self.bounds_at_resolution_to_baseline(
                 bounds,
                 resolution,
                 units,
@@ -6196,7 +6040,7 @@ class AnnotationStoreReader(WSIReader):
                 _,
                 _,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
@@ -6208,7 +6052,7 @@ class AnnotationStoreReader(WSIReader):
                 _,
                 size_at_requested,
                 post_read_scale,
-            ) = self._find_read_bounds_params(
+            ) = self.find_read_bounds_params(
                 bounds_at_baseline,
                 resolution=resolution,
                 units=units,
