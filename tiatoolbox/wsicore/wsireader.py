@@ -3509,7 +3509,7 @@ class TIFFWSIReader(WSIReader):
             def page_area(page: tifffile.TiffPage) -> float:
                 """Calculate the area of a page."""
                 return np.prod(
-                    DelegateWSIReader.canonical_shape(self._axes, page.shape)[:2]
+                    TIFFWSIReaderDelegate.canonical_shape(self._axes, page.shape)[:2]
                 )
 
             series_areas = [page_area(s.pages[0]) for s in all_series]  # skipcq
@@ -3535,11 +3535,13 @@ class TIFFWSIReader(WSIReader):
             sorted(
                 self.level_arrays.items(),
                 key=lambda x: -np.prod(
-                    DelegateWSIReader.canonical_shape(self._axes, x[1].array.shape[:2])
+                    TIFFWSIReaderDelegate.canonical_shape(
+                        self._axes, x[1].array.shape[:2]
+                    )
                 ),
             )
         )
-        self.delegate = DelegateWSIReader(self, self.level_arrays)
+        self.tiff_reader_delegate = TIFFWSIReaderDelegate(self, self.level_arrays)
 
     def _parse_svs_metadata(self: TIFFWSIReader) -> dict:
         """Extract SVS specific metadata.
@@ -3779,7 +3781,9 @@ class TIFFWSIReader(WSIReader):
         level_count = len(self.level_arrays)
         level_dimensions = [
             np.array(
-                DelegateWSIReader.canonical_shape(self._axes, p.array.shape)[:2][::-1]
+                TIFFWSIReaderDelegate.canonical_shape(self._axes, p.array.shape)[:2][
+                    ::-1
+                ]
             )
             for p in self.level_arrays.values()
         ]
@@ -3827,10 +3831,10 @@ class TIFFWSIReader(WSIReader):
         pad_mode: str = "constant",
         pad_constant_values: int | IntPair = 0,
         coord_space: str = "baseline",
-        **kwargs: dict,  # noqa: ARG002
+        **kwargs: dict,
     ) -> np.ndarray:
-        """Delegates method."""
-        return self.delegate.read_rect(
+        """See TIFFWSIReaderDelegate.read_rect docs for details."""
+        return self.tiff_reader_delegate.read_rect(
             location,
             size,
             resolution,
@@ -3839,6 +3843,7 @@ class TIFFWSIReader(WSIReader):
             pad_mode,
             pad_constant_values,
             coord_space,
+            **kwargs,
         )
 
     def read_bounds(
@@ -3852,8 +3857,8 @@ class TIFFWSIReader(WSIReader):
         coord_space: str = "baseline",
         **kwargs: dict,
     ) -> np.ndarray:
-        """Delegate call."""
-        return self.delegate.read_bounds(
+        """See TIFFWSIReaderDelegate.read_bounds docs for details."""
+        return self.tiff_reader_delegate.read_bounds(
             bounds,
             resolution,
             units,
@@ -3920,11 +3925,13 @@ class FsspecJsonWSIReader(WSIReader):
             sorted(
                 self.level_arrays.items(),
                 key=lambda x: -np.prod(
-                    DelegateWSIReader.canonical_shape(self._axes, x[1].array.shape[:2])
+                    TIFFWSIReaderDelegate.canonical_shape(
+                        self._axes, x[1].array.shape[:2]
+                    )
                 ),
             )
         )
-        self.delegate = DelegateWSIReader(self, self.level_arrays)
+        self.tiff_reader_delegate = TIFFWSIReaderDelegate(self, self.level_arrays)
 
     @staticmethod
     def is_valid_zarr_fsspec(file_path: str) -> bool:
@@ -3973,7 +3980,9 @@ class FsspecJsonWSIReader(WSIReader):
         level_count = len(self.level_arrays)
         level_dimensions = [
             np.array(
-                DelegateWSIReader.canonical_shape(self._axes, p.array.shape)[:2][::-1]
+                TIFFWSIReaderDelegate.canonical_shape(self._axes, p.array.shape)[:2][
+                    ::-1
+                ]
             )
             for p in self.level_arrays.values()
         ]
@@ -4010,10 +4019,10 @@ class FsspecJsonWSIReader(WSIReader):
         pad_mode: str = "constant",
         pad_constant_values: int | IntPair = 0,
         coord_space: str = "baseline",
-        **kwargs: dict,  # noqa: ARG002
+        **kwargs: dict,
     ) -> np.ndarray:
-        """Delegates method."""
-        return self.delegate.read_rect(
+        """See TIFFWSIReaderDelegate.read_rect docs for details."""
+        return self.tiff_reader_delegate.read_rect(
             location,
             size,
             resolution,
@@ -4022,6 +4031,7 @@ class FsspecJsonWSIReader(WSIReader):
             pad_mode,
             pad_constant_values,
             coord_space,
+            **kwargs,
         )
 
     def read_bounds(
@@ -4035,8 +4045,8 @@ class FsspecJsonWSIReader(WSIReader):
         coord_space: str = "baseline",
         **kwargs: dict,
     ) -> np.ndarray:
-        """Delegate call."""
-        return self.delegate.read_bounds(
+        """See TIFFWSIReaderDelegate.read_bounds docs for details."""
+        return self.tiff_reader_delegate.read_bounds(
             bounds,
             resolution,
             units,
@@ -4048,14 +4058,17 @@ class FsspecJsonWSIReader(WSIReader):
         )
 
 
-class DelegateWSIReader:
-    """Delegate class to handle image reading operations."""
+class TIFFWSIReaderDelegate:
+    """Delegate class to handle image reading operations.
+
+    Currently used in FsspecJsonWSIReader and TIFFWSIReader.
+    """
 
     def __init__(self, reader: WSIReader, level_arrays: dict[int, ArrayView]) -> None:
         """Initialize the delegate with a reader and level arrays.
 
         Args:
-            reader (WSIReader): An instance of a class that extends WSIReader.
+            reader (WSIReader): An instance of FsspecJsonWSIReader or TIFFWSIReader.
             level_arrays (dict[int, ArrayView]): Dictionary of level arrays.
         """
         self.reader = reader
@@ -4089,6 +4102,7 @@ class DelegateWSIReader:
         pad_mode: str = "constant",
         pad_constant_values: int | IntPair = 0,
         coord_space: str = "baseline",
+        **kwargs: dict,  # noqa: ARG002
     ) -> np.ndarray:
         """Read a region of the whole slide image at a location and size.
 
@@ -4316,7 +4330,7 @@ class DelegateWSIReader:
         return utils.transforms.background_composite(image=im_region, alpha=False)
 
     def read_bounds(
-        self: DelegateWSIReader,
+        self: TIFFWSIReaderDelegate,
         bounds: IntBounds,
         resolution: Resolution = 0,
         units: Units = "level",
