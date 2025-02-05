@@ -3475,7 +3475,8 @@ class DelegateWSIReader:
         self.reader = reader
         self.level_arrays = level_arrays
 
-    def canonical_shape(self, axes: str, shape: tuple[int, int]) -> tuple[int, int]:
+    @staticmethod
+    def canonical_shape(axes: str, shape: tuple[int, int]) -> tuple[int, int]:
         """Make a level shape tuple in YXS order.
 
         Args:
@@ -3947,7 +3948,9 @@ class TIFFWSIReader(WSIReader):
 
             def page_area(page: tifffile.TiffPage) -> float:
                 """Calculate the area of a page."""
-                return np.prod(self._canonical_shape(page.shape)[:2])
+                return np.prod(
+                    DelegateWSIReader.canonical_shape(self._axes, page.shape)[:2]
+                )
 
             series_areas = [page_area(s.pages[0]) for s in all_series]  # skipcq
             self.series_n = np.argmax(series_areas)
@@ -3971,29 +3974,12 @@ class TIFFWSIReader(WSIReader):
         self.level_arrays = dict(
             sorted(
                 self.level_arrays.items(),
-                key=lambda x: -np.prod(self._canonical_shape(x[1].array.shape[:2])),
+                key=lambda x: -np.prod(
+                    DelegateWSIReader.canonical_shape(self._axes, x[1].array.shape[:2])
+                ),
             )
         )
         self.delegate = DelegateWSIReader(self, self.level_arrays)
-
-    def _canonical_shape(self: TIFFWSIReader, shape: IntPair) -> tuple:
-        """Make a level shape tuple in YXS order.
-
-        Args:
-            shape (IntPair):
-                Input shape tuple.
-
-        Returns:
-            tuple:
-                Shape in YXS order.
-
-        """
-        if self._axes == "YXS":
-            return shape
-        if self._axes == "SYX":
-            return np.roll(shape, -1)
-        msg = f"Unsupported axes `{self._axes}`."
-        raise ValueError(msg)
 
     def _parse_svs_metadata(self: TIFFWSIReader) -> dict:
         """Extract SVS specific metadata.
@@ -4232,7 +4218,9 @@ class TIFFWSIReader(WSIReader):
         """
         level_count = len(self.level_arrays)
         level_dimensions = [
-            np.array(self._canonical_shape(p.array.shape)[:2][::-1])
+            np.array(
+                DelegateWSIReader.canonical_shape(self._axes, p.array.shape)[:2][::-1]
+            )
             for p in self.level_arrays.values()
         ]
         slide_dimensions = level_dimensions[0]
@@ -4371,7 +4359,9 @@ class FsspecJsonWSIReader(WSIReader):
         self.level_arrays = dict(
             sorted(
                 self.level_arrays.items(),
-                key=lambda x: -np.prod(self._canonical_shape(x[1].array.shape[:2])),
+                key=lambda x: -np.prod(
+                    DelegateWSIReader.canonical_shape(self._axes, x[1].array.shape[:2])
+                ),
             )
         )
         self.delegate = DelegateWSIReader(self, self.level_arrays)
@@ -4412,10 +4402,6 @@ class FsspecJsonWSIReader(WSIReader):
             logger.error("An error occurred: %s", e)
             return False
 
-    def _canonical_shape(self: FsspecJsonWSIReader, shape: IntPair) -> tuple:
-        """Delegates call to the delegate."""
-        return self.delegate.canonical_shape(self._axes, shape)
-
     def _info(self: FsspecJsonWSIReader) -> WSIMeta:
         """TIFF metadata constructor.
 
@@ -4426,7 +4412,9 @@ class FsspecJsonWSIReader(WSIReader):
         """
         level_count = len(self.level_arrays)
         level_dimensions = [
-            np.array(self._canonical_shape(p.array.shape)[:2][::-1])
+            np.array(
+                DelegateWSIReader.canonical_shape(self._axes, p.array.shape)[:2][::-1]
+            )
             for p in self.level_arrays.values()
         ]
         slide_dimensions = level_dimensions[0]
