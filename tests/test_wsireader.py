@@ -2834,6 +2834,6 @@ def test_generate_fsspec_json_file_and_validate(
 
     assert Path(json_file_path).exists(), "Output JSON file was not created."
 
-    assert FsspecJsonWSIReader.is_valid_zarr_fsspec(
-        json_file_path
-    ), "FSSPEC JSON file is invalid."
+    assert FsspecJsonWSIReader.is_valid_zarr_fsspec(json_file_path), (
+        "FSSPEC JSON file is invalid."
+    )
