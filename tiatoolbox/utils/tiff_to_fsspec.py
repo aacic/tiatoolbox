@@ -1,4 +1,10 @@
-"""Module for processing SVS metadata and generating fsspec JSON file."""
+"""Module for processing SVS metadata and generating fsspec zarr JSON file.
+
+The fsspec zarr json file is meant to be used in case SVS or TIFF
+can be accessed using byte range HTTP API.
+
+The fsspec zarr json file can be opened using FsspecJsonWSIReader.
+"""
 
 from __future__ import annotations
 
