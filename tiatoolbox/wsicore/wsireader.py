@@ -1110,7 +1110,7 @@ class WSIReader:
 
         return level, slide_dimension, rescale, tile_objective_value
 
-    def _read_rect_at_resolution(
+    def read_rect_at_resolution(
         self: WSIReader,
         location: NumPair,
         size: NumPair,
@@ -1121,7 +1121,7 @@ class WSIReader:
         pad_constant_values: Number | Iterable[NumPair] = 0,
         **kwargs: dict,
     ) -> np.ndarray:
-        """Internal helper to perform `read_rect` at resolution.
+        """Helper to perform `read_rect` at resolution.
 
         In actuality, `read_rect` at resolution is synonymous with
         calling `read_bound` at resolution because `size` has always
@@ -1937,7 +1937,7 @@ class OpenSlideWSIReader(WSIReader):
 
         """
         if coord_space == "resolution":
-            return self._read_rect_at_resolution(
+            return self.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
@@ -2478,7 +2478,7 @@ class JP2WSIReader(WSIReader):
 
         """
         if coord_space == "resolution":
-            return self._read_rect_at_resolution(
+            return self.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
@@ -3184,7 +3184,7 @@ class VirtualWSIReader(WSIReader):
 
         """
         if coord_space == "resolution":
-            return self._read_rect_at_resolution(
+            return self.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
@@ -3465,17 +3465,25 @@ class ArrayView:
 class DelegateWSIReader:
     """Delegate class to handle image reading operations."""
 
-    def _canonical_shape(self, axes: str, shape: tuple[int, int]) -> tuple:
+    def __init__(self, reader: WSIReader, level_arrays: dict[int, ArrayView]) -> None:
+        """Initialize the delegate with a reader and level arrays.
+
+        Args:
+            reader (WSIReader): An instance of a class that extends WSIReader.
+            level_arrays (dict[int, ArrayView]): Dictionary of level arrays.
+        """
+        self.reader = reader
+        self.level_arrays = level_arrays
+
+    def _canonical_shape(self, axes: str, shape: tuple[int, int]) -> tuple[int, int]:
         """Make a level shape tuple in YXS order.
 
         Args:
-            shape (IntPair):
-                Input shape tuple.
+            axes (str): The axes format.
+            shape (tuple[int, int]): Input shape tuple.
 
         Returns:
-            tuple:
-                Shape in YXS order.
-
+            tuple[int, int]: Shape in YXS order.
         """
         if axes == "YXS":
             return shape
@@ -3485,9 +3493,7 @@ class DelegateWSIReader:
         raise ValueError(msg)
 
     def read_rect(
-        self: DelegateWSIReader,
-        reader: WSIReader,
-        level_arrays: dict[int, ArrayView],
+        self,
         location: IntPair,
         size: IntPair,
         resolution: Resolution = 0,
@@ -3497,7 +3503,6 @@ class DelegateWSIReader:
         pad_constant_values: int | IntPair = 0,
         coord_space: str = "baseline",
     ) -> np.ndarray:
-        # Copy/paste from TIFFWSIReader, clean it up
         """Read a region of the whole slide image at a location and size.
 
         Location is in terms of the baseline image (level 0  / maximum
@@ -3679,7 +3684,7 @@ class DelegateWSIReader:
 
         """
         if coord_space == "resolution":
-            im_region = reader._read_rect_at_resolution(
+            im_region = self.reader.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
@@ -3697,7 +3702,7 @@ class DelegateWSIReader:
             level_read_size,
             post_read_scale,
             _,
-        ) = reader.find_read_rect_params(
+        ) = self.reader.find_read_rect_params(
             location=location,
             size=size,
             resolution=resolution,
@@ -3709,7 +3714,7 @@ class DelegateWSIReader:
             size=level_read_size,
         )
         im_region = utils.image.safe_padded_read(
-            image=level_arrays[read_level],
+            image=self.level_arrays[read_level],
             bounds=bounds,
             pad_mode=pad_mode,
             pad_constant_values=pad_constant_values,
@@ -3723,7 +3728,7 @@ class DelegateWSIReader:
 
         return utils.transforms.background_composite(image=im_region, alpha=False)
 
-    def read_bounds(self, bounds, **kwargs) -> np.ndarray:
+    def read_bounds(self, bounds: IntBounds) -> np.ndarray:
         """Handle reading a bounded region.
 
         Args:
@@ -3732,7 +3737,6 @@ class DelegateWSIReader:
         Returns:
             np.ndarray: Simulated image array.
         """
-        print(f"Reading bounds: {bounds}")
         width = bounds[2] - bounds[0]
         height = bounds[3] - bounds[1]
         return np.zeros((height, width, 3))  # Simulated image data
@@ -3751,7 +3755,6 @@ class TIFFWSIReader(WSIReader):
     ) -> None:
         """Initialize :class:`TIFFWSIReader`."""
         super().__init__(input_img=input_img, mpp=mpp, power=power)
-        self.delegate = DelegateWSIReader()
         self.tiff = tifffile.TiffFile(self.input_path)
         self._axes = self.tiff.pages[0].axes
         # Flag which is True if the image is a simple single page tile TIFF
@@ -3812,6 +3815,7 @@ class TIFFWSIReader(WSIReader):
                 key=lambda x: -np.prod(self._canonical_shape(x[1].array.shape[:2])),
             )
         )
+        self.delegate = DelegateWSIReader(self, self.level_arrays)
 
     def _canonical_shape(self: TIFFWSIReader, shape: IntPair) -> tuple:
         """Make a level shape tuple in YXS order.
@@ -4118,9 +4122,8 @@ class TIFFWSIReader(WSIReader):
         coord_space: str = "baseline",
         **kwargs: dict,  # noqa: ARG002
     ) -> np.ndarray:
+        """Delegates method."""
         return self.delegate.read_rect(
-            self,
-            self.level_arrays,
             location,
             size,
             resolution,
@@ -4316,9 +4319,6 @@ class FsspecJsonWSIReader(WSIReader):
     ) -> None:
         """Initialize :class:`FsspecJsonWSIReader`."""
         super().__init__(input_img=input_img, mpp=mpp, power=power)
-
-        self.delegate = DelegateWSIReader()
-
         jpeg_codec = Jpeg()
         register_codec(jpeg_codec, "imagecodecs_jpeg")
 
@@ -4364,6 +4364,7 @@ class FsspecJsonWSIReader(WSIReader):
                 key=lambda x: -np.prod(self._canonical_shape(x[1].array.shape[:2])),
             )
         )
+        self.delegate = DelegateWSIReader(self, self.level_arrays)
 
     @staticmethod
     def is_valid_zarr_fsspec(file_path: str) -> bool:
@@ -4469,9 +4470,8 @@ class FsspecJsonWSIReader(WSIReader):
         coord_space: str = "baseline",
         **kwargs: dict,  # noqa: ARG002
     ) -> np.ndarray:
+        """Delegates method."""
         return self.delegate.read_rect(
-            self,
-            self.level_arrays,
             location,
             size,
             resolution,
@@ -4901,7 +4901,7 @@ class DICOMWSIReader(WSIReader):
 
         """
         if coord_space == "resolution":
-            return self._read_rect_at_resolution(
+            return self.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
@@ -5471,7 +5471,7 @@ class NGFFWSIReader(WSIReader):
 
         """
         if coord_space == "resolution":
-            im_region = self._read_rect_at_resolution(
+            im_region = self.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
@@ -5997,7 +5997,7 @@ class AnnotationStoreReader(WSIReader):
 
         """
         if coord_space == "resolution":
-            return self._read_rect_at_resolution(
+            return self.read_rect_at_resolution(
                 location,
                 size,
                 resolution=resolution,
