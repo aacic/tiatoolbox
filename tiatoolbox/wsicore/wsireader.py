@@ -3723,7 +3723,7 @@ class TIFFWSIReader(WSIReader):
         }
 
         if self.tiff.is_svs:
-            filetype_params = TIFFWSIReaderDelegate.parse_svs_metadata()
+            filetype_params = TIFFWSIReaderDelegate.parse_svs_metadata(self.tiff.pages)
         elif self.tiff.is_ome:
             filetype_params = self._parse_ome_metadata()
         else:
