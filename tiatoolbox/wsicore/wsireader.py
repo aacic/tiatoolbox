@@ -19,7 +19,7 @@ import pandas as pd
 import tifffile
 import zarr
 from defusedxml import ElementTree
-from imagecodecs.numcodecs import Jpeg, Jpeg2k
+from imagecodecs.numcodecs import Delta, Jpeg, Jpeg2k, Lzw
 from numcodecs import register_codec
 from packaging.version import Version
 from PIL import Image
@@ -3655,40 +3655,6 @@ class TIFFWSIReader(WSIReader):
 
         return None
 
-    def _parse_generic_tiff_metadata(self: TIFFWSIReader) -> dict:
-        """Extract generic tiled metadata.
-
-        Returns:
-            dict: Dictionary of kwargs for WSIMeta.
-
-        """
-        mpp = None
-        objective_power = None
-        vendor = "Generic"
-
-        description = self.tiff.pages[0].description
-        raw = {"Description": description}
-        # Check for MPP in the tiff resolution tags
-        # res_units: 1 = undefined, 2 = inch, 3 = centimeter
-        res_units = self.tiff.pages[0].tags.get("ResolutionUnit")
-        res_x = self.tiff.pages[0].tags.get("XResolution")
-        res_y = self.tiff.pages[0].tags.get("YResolution")
-        if (
-            all(x is not None for x in [res_units, res_x, res_y])
-            and res_units.value != 1
-        ):
-            mpp = [
-                utils.misc.ppu2mpp(res_x.value[0] / res_x.value[1], res_units.value),
-                utils.misc.ppu2mpp(res_y.value[0] / res_y.value[1], res_units.value),
-            ]
-
-        return {
-            "objective_power": objective_power,
-            "vendor": vendor,
-            "mpp": mpp,
-            "raw": raw,
-        }
-
     def _info(self: TIFFWSIReader) -> WSIMeta:
         """TIFF metadata constructor.
 
@@ -3727,7 +3693,9 @@ class TIFFWSIReader(WSIReader):
         elif self.tiff.is_ome:
             filetype_params = self._parse_ome_metadata()
         else:
-            filetype_params = self._parse_generic_tiff_metadata()
+            filetype_params = TIFFWSIReaderDelegate.parse_generic_tiff_metadata(
+                self.tiff.pages
+            )
         filetype_params["raw"]["TIFF Tags"] = tiff_tags
 
         return WSIMeta(
@@ -3811,6 +3779,12 @@ class FsspecJsonWSIReader(WSIReader):
 
         jpeg2k_codec = Jpeg2k()
         register_codec(jpeg2k_codec, "imagecodecs_jpeg2k")
+
+        lzw_codec = Lzw()
+        register_codec(lzw_codec, "imagecodecs_lzw")
+
+        delta_codec = Delta()
+        register_codec(delta_codec, "imagecodecs_delta")
 
         mapper = fsspec.get_mapper(
             "reference://", fo=str(input_img), target_protocol="file"
@@ -4508,6 +4482,41 @@ class TIFFWSIReaderDelegate:
             )
 
         return im_region
+
+    @staticmethod
+    def parse_generic_tiff_metadata(pages: TiffPages) -> dict:
+        """Extract generic tiled metadata.
+
+        Returns:
+            dict: Dictionary of kwargs for WSIMeta.
+
+        """
+        mpp = None
+        objective_power = None
+        vendor = "Generic"
+
+        description = pages[0].description
+        raw = {"Description": description}
+        # Check for MPP in the tiff resolution tags
+        # res_units: 1 = undefined, 2 = inch, 3 = centimeter
+        res_units = pages[0].tags.get("ResolutionUnit")
+        res_x = pages[0].tags.get("XResolution")
+        res_y = pages[0].tags.get("YResolution")
+        if (
+            all(x is not None for x in [res_units, res_x, res_y])
+            and res_units.value != 1
+        ):
+            mpp = [
+                utils.misc.ppu2mpp(res_x.value[0] / res_x.value[1], res_units.value),
+                utils.misc.ppu2mpp(res_y.value[0] / res_y.value[1], res_units.value),
+            ]
+
+        return {
+            "objective_power": objective_power,
+            "vendor": vendor,
+            "mpp": mpp,
+            "raw": raw,
+        }
 
 
 class DICOMWSIReader(WSIReader):
