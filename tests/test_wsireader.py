@@ -27,7 +27,7 @@ from skimage.registration import phase_cross_correlation
 
 from tiatoolbox import cli, utils
 from tiatoolbox.annotation import SQLiteStore
-from tiatoolbox.utils import imread, tiff_fsspec
+from tiatoolbox.utils import imread, tiff_to_fsspec
 from tiatoolbox.utils.exceptions import FileNotSupportedError
 from tiatoolbox.utils.magic import is_sqlite3
 from tiatoolbox.utils.transforms import imresize, locsize2bounds
@@ -2830,7 +2830,7 @@ def test_generate_fsspec_json_file_and_validate(
     json_file_path = str(tmp_path / "fsspec.json")
     final_url = "https://example.com/some_id"
 
-    tiff_fsspec.main(svs_file_path, json_file_path, final_url)
+    tiff_to_fsspec.main(svs_file_path, json_file_path, final_url)
 
     assert Path(json_file_path).exists(), "Output JSON file was not created."
 
