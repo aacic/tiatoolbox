@@ -74,9 +74,12 @@ def main(svs_file_path: str, json_file_path: str, final_url: str) -> None:
     # Decode `.zattrs` JSON string into a dictionary
     zattrs = json.loads(json_data[".zattrs"])
 
+    # Ensure "multiscales" exists and is a list
+    if "multiscales" not in zattrs or not isinstance(zattrs["multiscales"], list):
+        zattrs["multiscales"] = [{}]  # Initialize as a list with an empty dictionary
+
     # Update metadata into `.zattrs`
-    if "multiscales" in zattrs and isinstance(zattrs["multiscales"], list):
-        zattrs["multiscales"][0]["metadata"] = metadata_serializable
+    zattrs["multiscales"][0]["metadata"] = metadata_serializable
 
     # Convert back to a JSON string
     json_data[".zattrs"] = json.dumps(zattrs)
