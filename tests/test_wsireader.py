@@ -2818,7 +2818,7 @@ def test_read_multi_channel(source_image: Path) -> None:
 def test_generate_fsspec_json_file_and_validate(
     sample_svs: Path, tmp_path: Path
 ) -> None:
-    """Test generate fsspec json file file and validate it."""
+    """Test generate fsspec json file and validate it."""
     file_types = ("*.svs",)
 
     files_all = utils.misc.grab_files_from_dir(
@@ -2837,3 +2837,33 @@ def test_generate_fsspec_json_file_and_validate(
     assert FsspecJsonWSIReader.is_valid_zarr_fsspec(json_file_path), (
         "FSSPEC JSON file is invalid."
     )
+
+
+def test_fsspec_wsireader_info_read(sample_svs: Path, tmp_path: Path) -> None:
+    """Test info read of the FsspecJsonWSIReader.
+
+    Generate fsspec json file and load image from:
+
+    https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs
+
+    """
+    file_types = ("*.svs",)
+
+    files_all = utils.misc.grab_files_from_dir(
+        input_path=Path(sample_svs).parent,
+        file_types=file_types,
+    )
+
+    svs_file_path = str(files_all[0])
+    json_file_path = str(tmp_path / "fsspec.json")
+
+    final_url = (
+        "https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs"
+    )
+
+    tiff_to_fsspec.main(svs_file_path, json_file_path, final_url)
+
+    wsi = wsireader.FsspecJsonWSIReader(json_file_path)
+    info = wsi.info
+
+    assert info is not None, "info  should not be None."

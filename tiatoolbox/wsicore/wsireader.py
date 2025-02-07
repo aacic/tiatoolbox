@@ -3792,19 +3792,7 @@ class FsspecJsonWSIReader(WSIReader):
 
         self._zarr_array = zarr.open(mapper, mode="r")
 
-        if "0" in self._zarr_array:
-            zattrs = self._zarr_array["0"].attrs
-            if "_ARRAY_DIMENSIONS" in zattrs:
-                self._axes = "".join(
-                    zattrs["_ARRAY_DIMENSIONS"]
-                )  # Concatenate dimensions
-            else:
-                msg = "'_ARRAY_DIMENSIONS' does not exist in the group '0'."
-                raise ValueError(msg)
-
-        else:
-            msg = "The group '0' does not exist in the zarr_array."
-            raise ValueError(msg)
+        self.__set_axes()
 
         self._zarr_store = self._zarr_array.store
 
@@ -3830,6 +3818,30 @@ class FsspecJsonWSIReader(WSIReader):
             )
         )
         self.tiff_reader_delegate = TIFFWSIReaderDelegate(self, self.level_arrays)
+
+    def __set_axes(self) -> None:
+        if isinstance(self._zarr_array, zarr.hierarchy.Group):
+            if "0" in self._zarr_array:
+                zattrs = self._zarr_array["0"].attrs
+                if "_ARRAY_DIMENSIONS" in zattrs:
+                    self._axes = "".join(
+                        zattrs["_ARRAY_DIMENSIONS"]
+                    )  # Concatenate dimensions
+                else:
+                    msg = "'_ARRAY_DIMENSIONS' does not exist in the group '0'."
+                    raise ValueError(msg)
+            else:
+                msg = "The group '0' does not exist in the zarr_array."
+                raise ValueError(msg)
+        else:
+            zattrs_path = self._zarr_array.attrs
+            if "_ARRAY_DIMENSIONS" in zattrs_path:
+                self._axes = "".join(
+                    zattrs_path["_ARRAY_DIMENSIONS"]
+                )  # Concatenate dimensions
+            else:
+                msg = "'_ARRAY_DIMENSIONS' does not exist in the root .zattrs."
+                raise ValueError(msg)
 
     @staticmethod
     def is_valid_zarr_fsspec(file_path: str) -> bool:
