@@ -3902,6 +3902,7 @@ class FsspecJsonWSIReader(WSIReader):
 
         zarr_attrs = self._zarr_array.attrs
 
+        filetype_params = {}
         # Check for "multiscales" and extract metadata
         if "multiscales" in zarr_attrs:
             multiscales = zarr_attrs[
