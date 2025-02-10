@@ -12,6 +12,7 @@ from pathlib import Path
 
 # When no longer supporting Python <3.9 this should be collections.abc.Iterable
 from typing import TYPE_CHECKING, Callable
+from unittest.mock import patch
 
 import cv2
 import glymur
@@ -2813,6 +2814,29 @@ def test_read_multi_channel(source_image: Path) -> None:
     assert region.shape == (100, 50, (new_img_array.shape[-1]))
     assert np.abs(np.median(region.astype(int) - target.astype(int))) == 0
     assert np.abs(np.mean(region.astype(int) - target.astype(int))) < 0.2
+
+
+def test_fsspec_json_wsi_reader_instantiation() -> None:
+    """Test that FsspecJsonWSIReader is retuned.
+
+    In case json is passed to  WSIReader.open, FsspecJsonWSIReader
+    should be returned.
+    """
+    input_path = "mock_path.json"
+    mpp = None
+    power = None
+
+    with (
+        patch(
+            "tiatoolbox.wsicore.wsireader.FsspecJsonWSIReader.is_valid_zarr_fsspec",
+            return_value=True,
+        ),
+        patch("tiatoolbox.wsicore.wsireader.FsspecJsonWSIReader") as mock_reader,
+    ):  # Combine `with` statements
+        result = WSIReader.open(input_path, mpp, power)
+
+        mock_reader.assert_called_once_with(input_path, mpp=mpp, power=power)
+        assert isinstance(result, type(mock_reader.return_value))
 
 
 def test_generate_fsspec_json_file_and_validate(

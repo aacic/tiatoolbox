@@ -379,8 +379,8 @@ class WSIReader:
         _, _, suffixes = utils.misc.split_path_name_ext(input_path)
         last_suffix = suffixes[-1]
 
-        if FsspecJsonWSIReader.is_valid_zarr_fsspec(input_path):
-            return FsspecJsonWSIReader(input_path, mpp=mpp, power=power)
+        if FsspecJsonWSIReader.is_valid_zarr_fsspec(input_img):
+            return FsspecJsonWSIReader(input_img, mpp=mpp, power=power)
 
         if last_suffix == ".db":
             return AnnotationStoreReader(input_path, **kwargs)
