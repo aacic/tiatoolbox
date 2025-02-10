@@ -3819,7 +3819,7 @@ class FsspecJsonWSIReader(WSIReader):
         )
         self.tiff_reader_delegate = TIFFWSIReaderDelegate(self, self.level_arrays)
 
-    def __set_axes(self) -> None:
+    def __set_axes(self) -> None:  # pragma: no cover
         if isinstance(self._zarr_array, zarr.hierarchy.Group):
             if "0" in self._zarr_array:
                 zattrs = self._zarr_array["0"].attrs

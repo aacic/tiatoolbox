@@ -223,6 +223,31 @@ def read_bounds_level_consistency(wsi: WSIReader, bounds: IntBounds) -> None:
 # Utility Test Classes & Functions
 # -------------------------------------------------------------------------------------
 
+_FSSPEC_WSI_CACHE = {}
+
+
+def fsspec_wsi(sample_svs: Path, tmp_path: Path) -> FsspecJsonWSIReader:
+    """Returns cachec FsspecJsonWSIReader instance."""
+    cache_key = "sample_svs"  # Unique cache key per file
+
+    if cache_key in _FSSPEC_WSI_CACHE:
+        return _FSSPEC_WSI_CACHE[cache_key]  # Return cached instance
+
+    file_types = ("*.svs",)
+    files_all = utils.misc.grab_files_from_dir(
+        input_path=Path(sample_svs).parent,
+        file_types=file_types,
+    )
+    svs_file_path = str(files_all[0])
+    json_file_path = str(tmp_path / "fsspec.json")
+    final_url = (
+        "https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs"
+    )
+    tiff_to_fsspec.main(svs_file_path, json_file_path, final_url)
+
+    _FSSPEC_WSI_CACHE[cache_key] = wsireader.FsspecJsonWSIReader(json_file_path)
+    return _FSSPEC_WSI_CACHE[cache_key]
+
 
 class DummyMutableOpenSlideObject:
     """Dummy OpenSlide object with mutable properties."""
@@ -2817,7 +2842,7 @@ def test_read_multi_channel(source_image: Path) -> None:
 
 
 def test_fsspec_json_wsi_reader_instantiation() -> None:
-    """Test that FsspecJsonWSIReader is retuned.
+    """Test that FsspecJsonWSIReader is returned.
 
     In case json is passed to  WSIReader.open, FsspecJsonWSIReader
     should be returned.
@@ -2871,23 +2896,41 @@ def test_fsspec_wsireader_info_read(sample_svs: Path, tmp_path: Path) -> None:
     https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs
 
     """
-    file_types = ("*.svs",)
-
-    files_all = utils.misc.grab_files_from_dir(
-        input_path=Path(sample_svs).parent,
-        file_types=file_types,
-    )
-
-    svs_file_path = str(files_all[0])
-    json_file_path = str(tmp_path / "fsspec.json")
-
-    final_url = (
-        "https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs"
-    )
-
-    tiff_to_fsspec.main(svs_file_path, json_file_path, final_url)
-
-    wsi = wsireader.FsspecJsonWSIReader(json_file_path)
+    wsi = fsspec_wsi(sample_svs, tmp_path)
     info = wsi.info
 
     assert info is not None, "info  should not be None."
+
+
+def test_read_bounds_fsspec_reader_baseline(sample_svs: Path, tmp_path: Path) -> None:
+    """Test FsspecJsonWSIReader read bounds at baseline.
+
+    Location coordinate is in baseline (level 0) reference frame.
+
+    """
+    wsi = fsspec_wsi(sample_svs, tmp_path)
+
+    bounds = SVS_TEST_TISSUE_BOUNDS
+    size = SVS_TEST_TISSUE_SIZE
+    im_region = wsi.read_bounds(bounds, resolution=0, units="level")
+
+    assert isinstance(im_region, np.ndarray)
+    assert im_region.dtype == "uint8"
+    assert im_region.shape == (*size[::-1], 3)
+
+
+def test_read_rect_fsspec_reader_baseline(sample_svs: Path, tmp_path: Path) -> None:
+    """Test FsspecJsonWSIReader read rect at baseline.
+
+    Location coordinate is in baseline (level 0) reference frame.
+
+    """
+    wsi = fsspec_wsi(sample_svs, tmp_path)
+
+    location = SVS_TEST_TISSUE_LOCATION
+    size = SVS_TEST_TISSUE_SIZE
+    im_region = wsi.read_rect(location, size, resolution=0, units="level")
+
+    assert isinstance(im_region, np.ndarray)
+    assert im_region.dtype == "uint8"
+    assert im_region.shape == (*size[::-1], 3)
