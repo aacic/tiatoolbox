@@ -60,7 +60,7 @@ def main(svs_file_path: str, json_file_path: str, final_url: str) -> None:
 
     if tiff.is_svs:
         metadata = TIFFWSIReaderDelegate.parse_svs_metadata(tiff_file_pages)
-    else:
+    else:  # pragma: no cover
         metadata = TIFFWSIReaderDelegate.parse_generic_tiff_metadata(tiff_file_pages)
 
     # Convert metadata to JSON-compatible format
