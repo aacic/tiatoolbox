@@ -2934,3 +2934,38 @@ def test_read_rect_fsspec_reader_baseline(sample_svs: Path, tmp_path: Path) -> N
     assert isinstance(im_region, np.ndarray)
     assert im_region.dtype == "uint8"
     assert im_region.shape == (*size[::-1], 3)
+
+
+def test_fsspec_reader_open_invalid_json_file(tmp_path: Path) -> None:
+    """Ensure JSONDecodeError is handled properly.
+
+    Pass invalid JSON to  FsspecJsonWSIReader.is_valid_zarr_fsspec.
+    """
+    json_path = tmp_path / "invalid.json"
+    json_path.write_text("{invalid json}")  # Corrupt JSON
+
+    assert not FsspecJsonWSIReader.is_valid_zarr_fsspec(str(json_path))
+
+
+def test_fsspec_reader_open_oserror_handling() -> None:
+    """Ensure OSError is handled properly.
+
+    Pass no existent JSON to  FsspecJsonWSIReader.is_valid_zarr_fsspec.
+
+    """
+    with patch("builtins.open", side_effect=OSError("File not found")):
+        result = FsspecJsonWSIReader.is_valid_zarr_fsspec("non_existent.json")
+
+    assert result is False, "Function should return False for OSError"
+
+
+def test_fsspec_reader_open_pass_empty_json(tmp_path: Path) -> None:
+    """Ensure JSONDecodeError is handled properly.
+
+    Pass empty JSON to  FsspecJsonWSIReader.is_valid_zarr_fsspec.
+
+    """
+    json_path = tmp_path / "empty.json"
+    json_path.write_text("{}")
+
+    assert not FsspecJsonWSIReader.is_valid_zarr_fsspec(str(json_path))

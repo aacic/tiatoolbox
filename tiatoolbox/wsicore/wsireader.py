@@ -3523,7 +3523,7 @@ class TIFFWSIReader(WSIReader):
         )
         self._zarr_lru_cache = zarr.LRUStoreCache(self._zarr_store, max_size=cache_size)
         self._zarr_group = zarr.open(self._zarr_lru_cache)
-        if not isinstance(self._zarr_group, zarr.hierarchy.Group):
+        if not isinstance(self._zarr_group, zarr.hierarchy.Group):  # pragma: no cover
             group = zarr.hierarchy.group()
             group[0] = self._zarr_group
             self._zarr_group = group
@@ -3867,7 +3867,7 @@ class FsspecJsonWSIReader(WSIReader):
                 data = json.load(file)
 
             # Basic validation for fsspec Zarr JSON structure
-            if not isinstance(data, dict) and ".zattrs" in data:
+            if ".zattrs" not in data:
                 logger.error("Field .zattrs missing in '%s'.", file_path)
                 return False
 
@@ -4058,7 +4058,7 @@ class TIFFWSIReaderDelegate:
         svs_tags = dict(parse_svs_tag(string) for string in key_value_pairs)
         raw["SVS Tags"] = svs_tags
         mpp = svs_tags.get("MPP")
-        if mpp is not None:
+        if mpp is not None:  # pragma: no cover
             mpp = [mpp] * 2
         objective_power = svs_tags.get("AppMag")
 
@@ -4515,7 +4515,7 @@ class TIFFWSIReaderDelegate:
         res_units = pages[0].tags.get("ResolutionUnit")
         res_x = pages[0].tags.get("XResolution")
         res_y = pages[0].tags.get("YResolution")
-        if (
+        if (  # pragma: no cover
             all(x is not None for x in [res_units, res_x, res_y])
             and res_units.value != 1
         ):

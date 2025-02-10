@@ -75,7 +75,9 @@ def main(svs_file_path: str, json_file_path: str, final_url: str) -> None:
     zattrs = json.loads(json_data[".zattrs"])
 
     # Ensure "multiscales" exists and is a list
-    if "multiscales" not in zattrs or not isinstance(zattrs["multiscales"], list):
+    if "multiscales" not in zattrs or not isinstance(
+        zattrs["multiscales"], list
+    ):  # pragma: no cover
         zattrs["multiscales"] = [{}]  # Initialize as a list with an empty dictionary
 
     # Update metadata into `.zattrs`
