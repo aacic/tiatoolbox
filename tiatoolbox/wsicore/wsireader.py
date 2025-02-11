@@ -3763,6 +3763,10 @@ class FsspecJsonWSIReader(WSIReader):
     The fsspec zarr json file represents a SVS or TIFF file
     that be accessed using byte range HTTP API.
 
+    All the information on the chunk locations in the SVS or TIFF file
+    is outlined as byte-ranges in the JSON,
+    so the reader requests only chunks that are needed to display requested tiles,
+    rather than the entire SVS or TIFF file.
     """
 
     def __init__(
@@ -3820,6 +3824,15 @@ class FsspecJsonWSIReader(WSIReader):
         self.tiff_reader_delegate = TIFFWSIReaderDelegate(self, self.level_arrays)
 
     def __set_axes(self) -> None:  # pragma: no cover
+        """Loads axes from the json file.
+
+        In case zarr array has a group 0 at root,
+        loads axes from the layer 0.
+
+        In case the zarr array doesn't have a group 0 at
+        root, loads axes from attrs at root.
+
+        """
         if isinstance(self._zarr_array, zarr.hierarchy.Group):
             if "0" in self._zarr_array:
                 zattrs = self._zarr_array["0"].attrs
