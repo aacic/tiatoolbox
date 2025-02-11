@@ -1,6 +1,6 @@
 """Module for processing SVS metadata and generating fsspec zarr JSON file.
 
-The fsspec zarr json file is meant to be used in case SVS or TIFF
+The fsspec zarr json file is meant to be used in case SVS or TIFF files
 can be accessed using byte range HTTP API.
 
 The fsspec zarr json file can be opened using FsspecJsonWSIReader.
