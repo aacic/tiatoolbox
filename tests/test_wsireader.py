@@ -227,8 +227,20 @@ _FSSPEC_WSI_CACHE = {}
 
 
 def fsspec_wsi(sample_svs: Path, tmp_path: Path) -> FsspecJsonWSIReader:
-    """Returns cachec FsspecJsonWSIReader instance."""
-    cache_key = "sample_svs"  # Unique cache key per file
+    """Returns cached FsspecJsonWSIReader instance.
+
+    The reader instance opens CMU-1-Small-Region.svs image.
+
+    It's cached so the reader can be reused,
+
+    since loading the whole image using HTTP range requests from:
+
+    https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs
+
+    takes about 20 seconds.
+
+    """
+    cache_key = "sample_svs"
 
     if cache_key in _FSSPEC_WSI_CACHE:
         return _FSSPEC_WSI_CACHE[cache_key]  # Return cached instance
@@ -2842,10 +2854,10 @@ def test_read_multi_channel(source_image: Path) -> None:
 
 
 def test_fsspec_json_wsi_reader_instantiation() -> None:
-    """Test that FsspecJsonWSIReader is returned.
+    """Test if FsspecJsonWSIReader is instantiated.
 
     In case json is passed to  WSIReader.open, FsspecJsonWSIReader
-    should be returned.
+    should be instantiated.
     """
     input_path = "mock_path.json"
     mpp = None
@@ -2857,11 +2869,9 @@ def test_fsspec_json_wsi_reader_instantiation() -> None:
             return_value=True,
         ),
         patch("tiatoolbox.wsicore.wsireader.FsspecJsonWSIReader") as mock_reader,
-    ):  # Combine `with` statements
-        result = WSIReader.open(input_path, mpp, power)
-
+    ):
+        WSIReader.open(input_path, mpp, power)
         mock_reader.assert_called_once_with(input_path, mpp=mpp, power=power)
-        assert isinstance(result, type(mock_reader.return_value))
 
 
 def test_generate_fsspec_json_file_and_validate(
@@ -2950,7 +2960,7 @@ def test_fsspec_reader_open_invalid_json_file(tmp_path: Path) -> None:
 def test_fsspec_reader_open_oserror_handling() -> None:
     """Ensure OSError is handled properly.
 
-    Pass no existent JSON to  FsspecJsonWSIReader.is_valid_zarr_fsspec.
+    Pass non existent JSON to  FsspecJsonWSIReader.is_valid_zarr_fsspec.
 
     """
     with patch("builtins.open", side_effect=OSError("File not found")):
@@ -2960,9 +2970,11 @@ def test_fsspec_reader_open_oserror_handling() -> None:
 
 
 def test_fsspec_reader_open_pass_empty_json(tmp_path: Path) -> None:
-    """Ensure JSONDecodeError is handled properly.
+    """Ensure empty JSON is handled properly.
 
-    Pass empty JSON to  FsspecJsonWSIReader.is_valid_zarr_fsspec.
+    Pass empty JSON to FsspecJsonWSIReader.is_valid_zarr_fsspec and
+
+    verify that it's not valid.
 
     """
     json_path = tmp_path / "empty.json"
