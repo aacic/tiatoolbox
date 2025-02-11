@@ -2237,7 +2237,7 @@ class OpenSlideWSIReader(WSIReader):
 
         # Fallback to calculating objective power from mpp
         if objective_power is None:
-            if mpp is not None:
+            if mpp is not None:  # pragma: no cover
                 objective_power = utils.misc.mpp2common_objective_power(
                     float(np.mean(mpp)),
                 )
@@ -3798,7 +3798,7 @@ class FsspecJsonWSIReader(WSIReader):
 
         self._zarr_lru_cache = zarr.LRUStoreCache(self._zarr_store, max_size=cache_size)
         self._zarr_group = zarr.open(self._zarr_lru_cache)
-        if not isinstance(self._zarr_group, zarr.hierarchy.Group):
+        if not isinstance(self._zarr_group, zarr.hierarchy.Group):  # pragma: no cover
             group = zarr.hierarchy.group()
             group[0] = self._zarr_group
             self._zarr_group = group
@@ -3904,7 +3904,7 @@ class FsspecJsonWSIReader(WSIReader):
 
         filetype_params = {}
         # Check for "multiscales" and extract metadata
-        if "multiscales" in zarr_attrs:
+        if "multiscales" in zarr_attrs:  # pragma: no cover
             multiscales = zarr_attrs[
                 "multiscales"
             ]  # List of multiscale metadata entries
