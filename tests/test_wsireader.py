@@ -9,7 +9,6 @@ import re
 import shutil
 from copy import deepcopy
 from pathlib import Path
-
 from typing import TYPE_CHECKING, Callable
 from unittest.mock import patch
 
