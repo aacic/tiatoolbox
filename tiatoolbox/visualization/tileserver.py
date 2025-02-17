@@ -165,6 +165,7 @@ class TileServer(Flask):
         self.route("/tileserver/tap_query/<x>/<y>")(self.tap_query)
         self.route("/tileserver/prop_range", methods=["PUT"])(self.prop_range)
         self.route("/tileserver/shutdown", methods=["POST"])(self.shutdown)
+        self.route("/tileserver/list_sessions", methods=["GET"])(self.list_sessions)
 
     def _get_session_id(self: TileServer) -> str:
         """Get the session_id from the request.
@@ -716,6 +717,14 @@ class TileServer(Flask):
             return "done"
         minv, maxv = prop_range
         self.renderers[session_id].score_fn = lambda x: (x - minv) / (maxv - minv)
+        return "done"
+
+    def list_sessions(self: TileServer) -> str:
+        for i, (key, layer) in enumerate(self.layers.items()):
+            print("key")
+            print(key)
+            print("layer")
+            print(layer.get("layer").info.as_dict())
         return "done"
 
     @staticmethod
