@@ -13,11 +13,11 @@ fi
 TP=$1
 CONTAINER_NAME="tile-server"
 PORT=5000
-IMAGE_NAME="ghcr.io/stjude/tile-server"
+IMAGE_NAME="aacic/tiatoolbox:latest"
 
 # temporarily ignore bash error
 set +e
-echo "finding any matching blat containers to stop and remove ..."
+echo "finding any matching tileserver containers to stop and remove ..."
   docker ps -aq --filter "name=$CONTAINER_NAME" | xargs -r docker rm -f
 # re-enable exit on errors
 set -e
@@ -30,7 +30,7 @@ docker run -d \
 	--network pp_network \
 	--mount type=bind,source=$TP,target=/home/root/tileserver/tp,readonly \
 	-e PORT=$PORT \
-	--memory="8g" \
+	--memory="4g" \
 	 --cpus="4" \
 	--publish $PORT:$PORT \
 	$IMAGE_NAME

@@ -395,6 +395,15 @@ paths:
         '200':
           description: Successful response
 
+  /tileserver/sessions/}:
+      get:
+          summary: Return all session/path mappings
+          responses:
+              '200':
+                  description: A jsonified session/path mappings
+                  content:
+                      application/json:
+
   /tileserver/tap_query/{x}/{y}:
     get:
       summary: Query annotation at a point

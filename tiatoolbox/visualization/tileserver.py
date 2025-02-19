@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import gc
 import io
 import json
 import os
@@ -165,7 +166,7 @@ class TileServer(Flask):
         self.route("/tileserver/tap_query/<x>/<y>")(self.tap_query)
         self.route("/tileserver/prop_range", methods=["PUT"])(self.prop_range)
         self.route("/tileserver/shutdown", methods=["POST"])(self.shutdown)
-        self.route("/tileserver/list_sessions", methods=["GET"])(self.list_sessions)
+        self.route("/tileserver/sessions", methods=["GET"])(self.sessions)
 
     def _get_session_id(self: TileServer) -> str:
         """Get the session_id from the request.
@@ -719,13 +720,12 @@ class TileServer(Flask):
         self.renderers[session_id].score_fn = lambda x: (x - minv) / (maxv - minv)
         return "done"
 
-    def list_sessions(self: TileServer) -> str:
+    def sessions(self: TileServer) -> Response:
+        session_paths = {}
         for i, (key, layer) in enumerate(self.layers.items()):
-            print("key")
-            print(key)
-            print("layer")
-            print(layer.get("layer").info.as_dict())
-        return "done"
+            session_paths[key] = str(layer.get("slide").info.as_dict()['file_path'])
+
+        return jsonify(session_paths)
 
     @staticmethod
     def shutdown() -> None:
