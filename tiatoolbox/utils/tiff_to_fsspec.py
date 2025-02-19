@@ -4,6 +4,7 @@ The fsspec zarr json file is meant to be used in case SVS or TIFF files
 can be accessed using byte range HTTP API.
 
 The fsspec zarr json file can be opened using FsspecJsonWSIReader.
+
 """
 
 from __future__ import annotations
@@ -48,7 +49,18 @@ def replace_url(
 
 
 def main(svs_file_path: str, json_file_path: str, final_url: str) -> None:
-    """Main function to handle SVS file processing."""
+    """Main function to process an SVS file.
+
+    Args:
+        svs_file_path (str): The local file path of the SVS file to be processed.
+        json_file_path (str): The file path where the output JSON will be saved.
+        final_url (str): The URL where the SVS file is stored online
+        and can be accessed via HTTP byte range API.
+
+    Example:
+        main('/path/to/CMU-1-Small-Region.svs', '/path/to/CMU-1-Small-Region.json', 'https://tiatoolbox.dcs.warwick.ac.uk/sample_wsis/CMU-1-Small-Region.svs')
+
+    """
     url_to_replace = f"{URL_PLACEHOLDER}{Path(svs_file_path).name}"
 
     tiff = TiffFile(svs_file_path)

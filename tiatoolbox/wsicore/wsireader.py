@@ -3767,6 +3767,7 @@ class FsspecJsonWSIReader(WSIReader):
     is outlined as byte-ranges in the JSON,
     so the reader requests only chunks that are needed to display requested tiles,
     rather than the entire SVS or TIFF file.
+
     """
 
     def __init__(
