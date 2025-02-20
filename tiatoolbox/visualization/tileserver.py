@@ -11,7 +11,7 @@ import sys
 import tempfile
 import urllib
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, cast
 
 import numpy as np
 from flask import Flask, Response, jsonify, make_response, request, send_file
@@ -858,19 +858,49 @@ class TileServer(Flask):
         return "done"
 
     def sessions(self: TileServer) -> Response:
-        """Retrieve a mapping of session keys to their corresponding slide file paths.
-
-        Returns:
-            Response:
-                A JSON response containing a mapping of session keys
-                and their respective slide file paths.
-
         """
-        session_paths = {}
-        for key, layer in self.layers.items():
-            slide = layer.get("slide")
-            if slide is not None:
-                session_paths[key] = str(slide.info.as_dict().get("file_path", ""))
+        Return a JSON mapping of every active session to the file paths that
+        back its layers.
+
+        Structure
+        ---------
+        {
+            "<session-id>": {
+                "slide" : "<abs-path to wsi>",
+                "layer1": "<abs-path to overlay>",
+                "layer2": "<abs-path to overlay>",
+                ...
+            },
+            ...
+        }
+
+        Only sessions that contain a ``slide`` layer are reported; additional
+        layers whose names start with ``layer`` are included if they expose an
+        ``input_path`` attribute.
+        """
+        session_paths: Dict[str, Dict[str, str]] = {}
+
+        for session_id, layer in self.layers.items():
+            layer_dict = cast(Dict[str, object], layer)
+
+            slide_obj_raw = layer_dict.get("slide")
+            if slide_obj_raw is None:
+                continue
+
+            # ⬇ Cast so we can access .info safely
+            slide_obj = cast(WSIReader, slide_obj_raw)
+            files = {
+                "slide": str(slide_obj.info.as_dict().get("file_path", ""))
+            }
+
+            for name, obj in layer_dict.items():
+                if name.startswith("layer"):
+                    input_path = getattr(obj, "input_path", None)
+                    if input_path:
+                        files[name] = str(input_path)
+
+            session_paths[session_id] = files
+
         return jsonify(session_paths)
 
     @staticmethod
