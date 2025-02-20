@@ -167,6 +167,7 @@ class TileServer(Flask):
         self.route("/tileserver/prop_range", methods=["PUT"])(self.prop_range)
         self.route("/tileserver/shutdown", methods=["POST"])(self.shutdown)
         self.route("/tileserver/sessions", methods=["GET"])(self.sessions)
+        self.route("/tileserver/healthcheck", methods=["GET"])(self.healthcheck)
 
     def _get_session_id(self: TileServer) -> str:
         """Get the session_id from the request.
@@ -726,6 +727,9 @@ class TileServer(Flask):
             session_paths[key] = str(layer.get("slide").info.as_dict()['file_path'])
 
         return jsonify(session_paths)
+
+    def healthcheck(self: TileServer):
+        return jsonify({"status": "OK"}), 200
 
     @staticmethod
     def shutdown() -> None:

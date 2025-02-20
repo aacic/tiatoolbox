@@ -395,12 +395,21 @@ paths:
         '200':
           description: Successful response
 
-  /tileserver/sessions/}:
+  /tileserver/sessions:
       get:
-          summary: Return all session/path mappings
+          summary: Returns all session/path mappings
           responses:
               '200':
                   description: A jsonified session/path mappings
+                  content:
+                      application/json:
+
+  /tileserver/healthcheck:
+      get:
+          summary: Returns Ok if server is online
+          responses:
+              '200':
+                  description: A json with status field
                   content:
                       application/json:
 
