@@ -164,6 +164,8 @@ class TileServer(Flask):
         )
         self.route("/tileserver/tap_query/<x>/<y>")(self.tap_query)
         self.route("/tileserver/prop_range", methods=["PUT"])(self.prop_range)
+        self.route("/tileserver/sessions", methods=["GET"])(self.sessions)
+        self.route("/tileserver/healthcheck", methods=["GET"])(self.healthcheck)
         self.route("/tileserver/shutdown", methods=["POST"])(self.shutdown)
 
     def _get_session_id(self: TileServer) -> str:
@@ -701,6 +703,16 @@ class TileServer(Flask):
         if len(anns) == 0:
             return json.dumps({})
         return jsonify(list(anns.values())[-1].properties)
+
+    def sessions(self: TileServer) -> Response:
+        session_paths = {}
+        for i, (key, layer) in enumerate(self.layers.items()):
+            session_paths[key] = str(layer.get("slide").info.as_dict()["file_path"])
+
+        return jsonify(session_paths)
+
+    def healthcheck(self: TileServer):
+        return jsonify({"status": "OK"}), 200
 
     def prop_range(self: TileServer) -> str:
         """Set the range which the color mapper will map to.
